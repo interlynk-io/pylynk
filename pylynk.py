@@ -1,39 +1,44 @@
+"""
+This module contains functions for interacting with the Interlynk API.
+"""
+
 import os
 import sys
 import json
-import requests
 import argparse
-from gql.transport.aiohttp import AIOHTTPTransport
+import requests
 
+INTERLYNK_API_URL = 'https://api.interlynk.io/lynkapi'
+INTERLYNK_API_TIMEOUT = 100
 
-url_local = 'http://localhost:3000/lynkapi'
-
-projects_query = """
-query GetOrganization {
-  organization {
-    email
-    id
-    name
-    updatedAt
-    url
-    currentUser {
-      id
-      name
-      email
+QUERY_PROJECTS_LIST = """
+query GetProjects($first: Int, $last: Int, $after: String, $before: String) {
+  projects(first: $first, last: $last, after: $after, before: $before) {
+    pageInfo {
+      endCursor
+      hasNextPage
+      startCursor
+      hasPreviousPage
       __typename
     }
-    users {
+    nodes {
       id
       name
-      email
-      role
-      timezone
-      createdAt
-      __typename
-    }
-    organizationConnectors {
-      enabled
-      name
+      description
+      updatedAt
+      organizationId
+      sboms {
+        id
+        format
+        updatedAt
+        primaryComponent {
+          id
+          name
+          version
+          __typename
+        }
+        __typename
+      }
       __typename
     }
     __typename
@@ -41,50 +46,113 @@ query GetOrganization {
 }
 """
 
-headers_local = {
-    'Authentication': 'Bearer TBD',
-    'User-Agent': 'TBD'
+QUERY_SBOM_UPLOAD = """
+mutation uploadSbom($doc: Upload!, $projectId: ID!) {
+  sbomUpload(
+    input: {
+      doc: $doc,
+      projectId: $projectId
+    }
+  ) {
+    errors
+  }
 }
+"""
 
-data_local = {
-    'operationName': 'GetOrganization',
+QUERY_PROJECT_PARAMS = {
+    'operationName': 'GetProjects',
     'variables': {},
-    'query': projects_query
+    'query': QUERY_PROJECTS_LIST
     }
 
 
-def fetch(url, headers, data):
-    transport = AIOHTTPTransport(url)
-    client = Client(transport=transport, fetch_schema_from_transport=True)
-    result = client.execute(projects_query)
-    print(result)
-    return
+def products(token):
+    """
+    Fetches a list of products from the Interlynk API using the provided token.
+
+    Args:
+      token (str): The authentication token to use for the API request.
+
+    Returns:
+      None
+    """
+    headers = {
+      "Authorization": "Bearer " + token
+    }
+
+    response = requests.post(INTERLYNK_API_URL,
+                             headers=headers,
+                             data=QUERY_PROJECT_PARAMS,
+                             timeout=INTERLYNK_API_TIMEOUT)
+    for proj in json.loads(response.text)['data']['projects']['nodes']:
+        print(f'{proj["name"]}')
 
 
-def upload(file, project, token):
+def upload(file, product, token):
+    """
+    Uploads an SBOM file to a project in the Interlynk API.
+
+    Args:
+      file (str): The path to the SBOM file to upload.
+      product (str): The ID of the product to upload the SBOM to.
+      token (str): The authentication token to use for the API request.
+
+    Returns:
+      None
+    """
     if os.path.isfile(file) is False:
         print('SBOM File not found')
         return
 
-    url = "http://localhost:3000/lynkapi"
     headers = {
-        "Authorization": "Bearer " + token
+      "Authorization": "Bearer " + token
     }
 
-    operations =json.dumps({
-        "query": "mutation uploadSbom($doc: Upload!, $projectId: ID!) { sbomUpload(input: { doc: $doc, projectId: $projectId }) { errors } }",
-        "variables": {"doc": None, "projectId": project}
+    operations = json.dumps({
+      "query": QUERY_SBOM_UPLOAD,
+      "variables": {"doc": None, "projectId": product}
     })
     map_data = json.dumps({"0": ["variables.doc"]})
 
     form_data = {
-        "operations": operations,
-        "map": map_data
+      "operations": operations,
+      "map": map_data
     }
-    myfiles = {'0': open(file ,'rb')}
 
-    response = requests.post(url, headers=headers, data=form_data, files=myfiles)
-    print(response.text)
+    with open(file, 'rb') as sbom:
+        myfiles = {'0': sbom}
+        response = requests.post(INTERLYNK_API_URL,
+                                 headers=headers,
+                                 data=form_data,
+                                 files=myfiles,
+                                 timeout=INTERLYNK_API_TIMEOUT)
+        if os.path.isfile(file) is False:
+            print('SBOM File not found')
+            return
+
+        headers = {
+            "Authorization": "Bearer " + token
+        }
+
+        operations = json.dumps({
+            "query": QUERY_SBOM_UPLOAD,
+            "variables": {"doc": None, "projectId": product}
+        })
+        map_data = json.dumps({"0": ["variables.doc"]})
+
+        form_data = {
+            "operations": operations,
+            "map": map_data
+        }
+
+        with open(file, 'rb') as sbom:
+            myfiles = {'0': sbom}
+            response = requests.post(INTERLYNK_API_URL,
+                                     headers=headers,
+                                     data=form_data,
+                                     files=myfiles,
+                                     timeout=INTERLYNK_API_TIMEOUT)
+            print(response.text)
 
 
 def setup_args():
@@ -92,16 +160,20 @@ def setup_args():
     Setup command line arguments
     :return: arguments object
     """
-    parser = argparse.ArgumentParser(description='Interlynk Python CLI')
+    parser = argparse.ArgumentParser(description='Interlynk command line tool')
 
     subparsers = parser.add_subparsers(title="subcommands", dest="subcommand")
-    upload_parser = subparsers.add_parser("upload", help="Upload an SBOM")
+    upload_parser = subparsers.add_parser("upload", help="Upload an SBOM file")
     upload_parser.add_argument("--sbom", required=True, help="SBOM path")
     upload_parser.add_argument("--proj", required=True, help="Project name")
-    upload_parser.add_argument("--token", required=False, help="Security token")
+    upload_parser.add_argument("--token",
+                               required=False,
+                               help="Security token")
 
-    projects_parser = subparsers.add_parser("projects", help="List projects")
-    projects_parser.add_argument("--token", required=False, help="Security token")
+    products_parser = subparsers.add_parser("prods", help="List products")
+    products_parser.add_argument("--token",
+                                 required=False,
+                                 help="Security token")
 
     args = parser.parse_args()
     return args
@@ -112,14 +184,14 @@ def main() -> int:
     Run Interlynk Commands
     """
     args = setup_args()
-
+    token = args.token or os.environ.get("INTERLYNK_SECURITY_TOKEN")
     if args.subcommand == "upload":
-        upload(args.sbom, args.proj, args.token)
-    # elif args.subcommand == "projects":
-    #    print('fetching')
-    #    fetch(url_local, headers_local, data_local)
+        upload(args.sbom, args.proj, token)
+    elif args.subcommand == "prods":
+        products(token)
     else:
-        print("Invalid command. Use 'upload' or 'projects'.")
+        print("Invalid command.")
+        return 1
     return 0
 
 
