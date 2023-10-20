@@ -6,7 +6,9 @@ import os
 import sys
 import json
 import argparse
+import logging
 import requests
+
 
 INTERLYNK_API_URL = 'https://api.interlynk.io/lynkapi'
 INTERLYNK_API_TIMEOUT = 100
@@ -68,29 +70,41 @@ QUERY_PROJECT_PARAMS = {
 
 def products(token):
     """
-    Fetches a list of products from the Interlynk API using the provided token.
+    Fetches the Interlynk list of products using the provided token.
 
     Args:
       token (str): The authentication token to use for the API request.
 
     Returns:
-      None
+      map
     """
+    products_map = {}
     headers = {
       "Authorization": "Bearer " + token
     }
+    try:
+        response = requests.post(INTERLYNK_API_URL,
+                                 headers=headers,
+                                 data=QUERY_PROJECT_PARAMS,
+                                 timeout=INTERLYNK_API_TIMEOUT)
+        if response.status_code == 200:
+            response_data = response.json()
+            for product in response_data['data']['projects']['nodes']:
+                products_map[product["name"]] = product["id"]
+            logging.debug("%d products: %s", len(products_map), products_map)
+            return products_map
+        logging.error("Error fetching products: %s", response.status_code)
+    except requests.exceptions.RequestException as ex:
+        logging.error("RequestException:  %s", ex)
+    except json.JSONDecodeError as ex:
+        logging.error("JSONDecodeError: %s", ex)
 
-    response = requests.post(INTERLYNK_API_URL,
-                             headers=headers,
-                             data=QUERY_PROJECT_PARAMS,
-                             timeout=INTERLYNK_API_TIMEOUT)
-    for proj in json.loads(response.text)['data']['projects']['nodes']:
-        print(f'{proj["name"]}')
+    return products_map
 
 
 def upload(file, product, token):
     """
-    Uploads an SBOM file to a project in the Interlynk API.
+    Uploads an SBOM file to a product using the Interlynk API.
 
     Args:
       file (str): The path to the SBOM file to upload.
@@ -98,11 +112,18 @@ def upload(file, product, token):
       token (str): The authentication token to use for the API request.
 
     Returns:
-      None
+      0 for success 1 otherwise
     """
     if os.path.isfile(file) is False:
-        print('SBOM File not found')
-        return
+        logging.error('SBOM File not found')
+        return 1
+
+    products_map = products(token)
+    if products_map is None or product not in products_map:
+        logging.error("No product found with the name %s", product)
+        return 1
+    product_id = products_map[product]
+    logging.debug("Uploading SBOM to product ID %s", product_id)
 
     headers = {
       "Authorization": "Bearer " + token
@@ -110,7 +131,7 @@ def upload(file, product, token):
 
     operations = json.dumps({
       "query": QUERY_SBOM_UPLOAD,
-      "variables": {"doc": None, "projectId": product}
+      "variables": {"doc": None, "projectId": product_id}
     })
     map_data = json.dumps({"0": ["variables.doc"]})
 
@@ -119,53 +140,39 @@ def upload(file, product, token):
       "map": map_data
     }
 
-    with open(file, 'rb') as sbom:
-        myfiles = {'0': sbom}
-        response = requests.post(INTERLYNK_API_URL,
-                                 headers=headers,
-                                 data=form_data,
-                                 files=myfiles,
-                                 timeout=INTERLYNK_API_TIMEOUT)
-        if os.path.isfile(file) is False:
-            print('SBOM File not found')
-            return
-
-        headers = {
-            "Authorization": "Bearer " + token
-        }
-
-        operations = json.dumps({
-            "query": QUERY_SBOM_UPLOAD,
-            "variables": {"doc": None, "projectId": product}
-        })
-        map_data = json.dumps({"0": ["variables.doc"]})
-
-        form_data = {
-            "operations": operations,
-            "map": map_data
-        }
-
+    try:
         with open(file, 'rb') as sbom:
-            myfiles = {'0': sbom}
+            files_map = {'0': sbom}
             response = requests.post(INTERLYNK_API_URL,
                                      headers=headers,
                                      data=form_data,
-                                     files=myfiles,
+                                     files=files_map,
                                      timeout=INTERLYNK_API_TIMEOUT)
-            print(response.text)
+            if response.status_code == 200:
+                logging.debug("SBOM Uploading response: %s", response.text)
+                return 0
+            logging.error("Error uploading sbom: %d", response.status_code)
+    except requests.exceptions.RequestException as ex:
+        logging.error("RequestException: %s", ex)
+    except FileNotFoundError as ex:
+        logging.error("FileNotFoundError: %s", ex)
+    return 1
 
 
 def setup_args():
     """
     Setup command line arguments
-    :return: arguments object
+
+    Returns:
+      argparse: The parsed command line arguments
     """
     parser = argparse.ArgumentParser(description='Interlynk command line tool')
+    parser.add_argument('--verbose', '-v', action='count', default=0)
 
     subparsers = parser.add_subparsers(title="subcommands", dest="subcommand")
     upload_parser = subparsers.add_parser("upload", help="Upload an SBOM file")
     upload_parser.add_argument("--sbom", required=True, help="SBOM path")
-    upload_parser.add_argument("--proj", required=True, help="Project name")
+    upload_parser.add_argument("--prod", required=True, help="Product name")
     upload_parser.add_argument("--token",
                                required=False,
                                help="Security token")
@@ -179,18 +186,42 @@ def setup_args():
     return args
 
 
+def log_level(args):
+    """
+    Set the logging level from verbose param
+
+    Args:
+      args (argparse.Namespace): The parsed command line arguments.
+
+    Returns:
+      None
+    """
+    if args.verbose == 0:
+        logging.basicConfig(level=logging.ERROR)
+    elif args.verbose == 1:
+        logging.basicConfig(level=logging.WARNING)
+    elif args.verbose == 2:
+        logging.basicConfig(level=logging.INFO)
+    elif args.verbose >= 3:
+        logging.basicConfig(level=logging.DEBUG)
+
+
 def main() -> int:
     """
     Run Interlynk Commands
+    :return: error code
     """
     args = setup_args()
+    log_level(args)
     token = args.token or os.environ.get("INTERLYNK_SECURITY_TOKEN")
     if args.subcommand == "upload":
-        upload(args.sbom, args.proj, token)
+        logging.debug("Uploading SBOM %s for product %s", args.sbom, args.prod)
+        return upload(args.sbom, args.prod, token)
     elif args.subcommand == "prods":
-        products(token)
+        logging.debug("Fetching Product list")
+        print(products(token))
     else:
-        print("Invalid command.")
+        logging.info("Invalid command.")
         return 1
     return 0
 
