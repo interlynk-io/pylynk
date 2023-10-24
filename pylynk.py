@@ -89,6 +89,7 @@ def products(token):
                                  timeout=INTERLYNK_API_TIMEOUT)
         if response.status_code == 200:
             response_data = response.json()
+            logging.debug("Products response: %s", response_data)
             for product in response_data['data']['projects']['nodes']:
                 products_map[product["name"]] = product["id"]
             logging.debug("%d products: %s", len(products_map), products_map)
@@ -102,7 +103,7 @@ def products(token):
     return products_map
 
 
-def upload(file, product, token):
+def upload_sbom(file, product, token):
     """
     Uploads an SBOM file to a product using the Interlynk API.
 
@@ -159,6 +160,27 @@ def upload(file, product, token):
     return 1
 
 
+def print_products(token):
+    """
+    Print the Interlynk list of products using the provided token.
+
+    Args:
+      token (str): The authentication token to use for the API request.
+
+    Returns:
+      0 for success 1 otherwise
+    """
+    products_map = products(token)
+    if products_map is None:
+        logging.error("No products found")
+        return 1
+
+    print("ID\t\t\t\t\tPRODUCT NAME")
+    for prod_name, prod_id in products_map.items():
+        print(f"{prod_id}\t{prod_name}")
+    return 0
+
+
 def setup_args():
     """
     Setup command line arguments
@@ -209,21 +231,24 @@ def log_level(args):
 def main() -> int:
     """
     Run Interlynk Commands
-    :return: error code
+
+    Returns:
+      Error code
     """
     args = setup_args()
     log_level(args)
-    token = args.token or os.environ.get("INTERLYNK_SECURITY_TOKEN")
+    token = os.environ.get("INTERLYNK_SECURITY_TOKEN")
+    if hasattr(args, 'token'):
+        token = args.token
+
     if args.subcommand == "upload":
-        logging.debug("Uploading SBOM %s for product %s", args.sbom, args.prod)
-        return upload(args.sbom, args.prod, token)
-    elif args.subcommand == "prods":
-        logging.debug("Fetching Product list")
-        print(products(token))
-    else:
-        logging.info("Invalid command.")
-        return 1
-    return 0
+        logging.info("Uploading SBOM %s for product %s", args.sbom, args.prod)
+        return upload_sbom(args.sbom, args.prod, token)
+    if args.subcommand == "prods":
+        logging.info("Fetching Product list")
+        return print_products(token)
+    logging.error("Invalid command.")
+    return 1
 
 
 if __name__ == "__main__":
