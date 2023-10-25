@@ -171,7 +171,7 @@ def print_products(token):
       0 for success 1 otherwise
     """
     products_map = products(token)
-    if products_map is None:
+    if not products_map:
         logging.error("No products found")
         return 1
 
@@ -192,17 +192,18 @@ def setup_args():
     parser.add_argument('--verbose', '-v', action='count', default=0)
 
     subparsers = parser.add_subparsers(title="subcommands", dest="subcommand")
-    upload_parser = subparsers.add_parser("upload", help="Upload an SBOM file")
-    upload_parser.add_argument("--sbom", required=True, help="SBOM path")
-    upload_parser.add_argument("--prod", required=True, help="Product name")
-    upload_parser.add_argument("--token",
-                               required=False,
-                               help="Security token")
 
     products_parser = subparsers.add_parser("prods", help="List products")
     products_parser.add_argument("--token",
                                  required=False,
                                  help="Security token")
+
+    upload_parser = subparsers.add_parser("upload", help="Upload SBOM")
+    upload_parser.add_argument("--sbom", required=True, help="SBOM path")
+    upload_parser.add_argument("--prod", required=True, help="Product name")
+    upload_parser.add_argument("--token",
+                               required=False,
+                               help="Security token")
 
     args = parser.parse_args()
     return args
@@ -238,7 +239,7 @@ def main() -> int:
     args = setup_args()
     log_level(args)
     token = os.environ.get("INTERLYNK_SECURITY_TOKEN")
-    if hasattr(args, 'token'):
+    if hasattr(args, 'token') and args.token is not None:
         token = args.token
 
     if args.subcommand == "upload":
@@ -247,7 +248,8 @@ def main() -> int:
     if args.subcommand == "prods":
         logging.info("Fetching Product list")
         return print_products(token)
-    logging.error("Invalid command.")
+    logging.error("Missing or invalid command. \
+                  Supported commands: {upload,prods}")
     return 1
 
 
