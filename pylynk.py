@@ -9,7 +9,8 @@ import argparse
 import logging
 import base64
 import requests
-
+import paramiko
+import hashlib
 
 INTERLYNK_API_URL = 'https://api.interlynk.io/lynkapi'
 INTERLYNK_API_TIMEOUT = 100
@@ -265,6 +266,39 @@ def download(product, version, token):
     return 0
 
 
+def sign(product, version, pem_file, token):
+
+    mykey = paramiko.RSAKey(filename=pem_file, password=None)
+    data_json = products(token)
+    if not data_json:
+        logging.error("No products found")
+        return 1
+    product_id, sbom_id = match_product_sbom_id(data_json, product, version)
+    if not product_id or not sbom_id:
+        logging.error("No match with name %s, version %s", product, version)
+        return 1
+
+    sbom = download_sbom(product_id, sbom_id, token)
+    hash_obj = hashlib.sha256()
+    hash_obj.update(sbom)
+    data_hash = hash_obj.digest()
+
+    print("Signature (base64 encoded):", data_hash)
+
+    signature_message = mykey.sign_ssh_data(data_hash)
+
+    # Extract the signature bytes from the Message object
+    signature_bytes = signature_message.get_binary()
+
+    print("Signature (base64 encoded):", signature_bytes)
+
+    # Convert the signature bytes to a base64-encoded string
+    signature_base64 = base64.b64encode(signature_bytes).decode('utf-8')
+
+    print("Signature (base64 encoded):", signature_base64)
+    return 0
+
+
 def print_products(token):
     """
     Print the Interlynk list of products using the provided token.
@@ -382,6 +416,12 @@ def main() -> int:
                      args.ver,
                      args.token)
         return download(args.prod, args.ver, token)
+    if args.subcommand == "sign":
+        logging.info("Signing SBOM %s for product %s, version %s",
+                     args.prod,
+                     args.ver,
+                     args.token)
+        return sign(args.prod, args.ver, args.key, token)
 
     if args.subcommand in ["sign", "verify"]:
         logging.error("Not implemented")
