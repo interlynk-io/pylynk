@@ -7,6 +7,7 @@ import sys
 import json
 import argparse
 import logging
+import base64
 import requests
 
 
@@ -61,11 +62,48 @@ mutation uploadSbom($doc: Upload!, $projectId: ID!) {
 }
 """
 
+QUERY_SBOM_DOWNLOAD = """
+query downloadSbom($projectId: Uuid!, $sbomId: Uuid!, $spec: String,
+  $format: String, $includeVulns: Boolean, $includeVex: Boolean,
+  $original: Boolean) {
+  sbom(projectId: $projectId, sbomId: $sbomId) {
+    download(
+      sbomId: $sbomId
+      spec: $spec
+      format: $format
+      includeVulns: $includeVulns
+      includeVex: $includeVex
+      original: $original
+    )
+    __typename
+  }
+}
+"""
+
 QUERY_PROJECT_PARAMS = {
     'operationName': 'GetProjects',
     'variables': {},
     'query': QUERY_PROJECTS_LIST
     }
+
+
+def match_product_id(data_json, product):
+    for node in data_json["data"]["projects"]["nodes"]:
+        if node["name"] == product:
+            return node["id"]
+    return None
+
+
+def match_product_sbom_id(data_json, product, version):
+
+    for node in data_json["data"]["projects"]["nodes"]:
+        if node["name"] == product:
+            sbom_list = node["sboms"]
+            for sbom in sbom_list:
+                sbom_component = sbom["primaryComponent"]
+                if sbom_component["version"] == version:
+                    return node["id"], sbom["id"]
+    return None, None
 
 
 def products(token):
@@ -76,9 +114,8 @@ def products(token):
       token (str): The authentication token to use for the API request.
 
     Returns:
-      map
+      json_map
     """
-    products_map = {}
     headers = {
       "Authorization": "Bearer " + token
     }
@@ -89,18 +126,15 @@ def products(token):
                                  timeout=INTERLYNK_API_TIMEOUT)
         if response.status_code == 200:
             response_data = response.json()
-            logging.debug("Products response: %s", response_data)
-            for product in response_data['data']['projects']['nodes']:
-                products_map[product["name"]] = product["id"]
-            logging.debug("%d products: %s", len(products_map), products_map)
-            return products_map
+            logging.debug("Products response type: %s", type(response_data))
+            return response_data
         logging.error("Error fetching products: %s", response.status_code)
     except requests.exceptions.RequestException as ex:
         logging.error("RequestException:  %s", ex)
     except json.JSONDecodeError as ex:
         logging.error("JSONDecodeError: %s", ex)
 
-    return products_map
+    return None
 
 
 def upload_sbom(file, product, token):
@@ -119,11 +153,11 @@ def upload_sbom(file, product, token):
         logging.error('SBOM File not found')
         return 1
 
-    products_map = products(token)
-    if products_map is None or product not in products_map:
+    data_json = products(token)
+    if data_json is None:
         logging.error("No product found with the name %s", product)
         return 1
-    product_id = products_map[product]
+    product_id = match_product_id(data_json, product)
     logging.debug("Uploading SBOM to product ID %s", product_id)
 
     headers = {
@@ -158,6 +192,77 @@ def upload_sbom(file, product, token):
     except FileNotFoundError as ex:
         logging.error("FileNotFoundError: %s", ex)
     return 1
+
+
+def download_sbom(product_id, sbom_id, token):
+    """
+    Downloads an SBOM file from using the provided authentication token.
+
+    Args:
+      token (str): The authentication token to use for the API request.
+
+    Returns:
+      The downloaded SBOM file as a or None if the download failed.
+    """
+    variables = {
+        "projectId": product_id,
+        "sbomId": sbom_id,
+        "spec": "cyclonedx",
+        "format": "json",
+        "includeVulns": False,
+        "includeVex": False,
+        "original": False,
+    }
+
+    request_data = {
+        "query": QUERY_SBOM_DOWNLOAD,
+        "variables": variables,
+    }
+
+    headers = {
+      "Authorization": "Bearer " + token
+    }
+
+    response = requests.post(INTERLYNK_API_URL,
+                             headers=headers,
+                             json=request_data,
+                             timeout=INTERLYNK_API_TIMEOUT)
+
+    if response.status_code == 200:
+        try:
+            data = response.json()
+
+            if "errors" in data:
+                logging.error("GraphQL response contains errors:")
+                for error in data["errors"]:
+                    logging.error(error["message"])
+                return None
+
+            b64data = data.get("data", {}).get("sbom", {}).get("download")
+            decoded_content = base64.b64decode(b64data)
+            logging.debug('Completed download and decoding')
+            return decoded_content
+        except json.JSONDecodeError:
+            logging.error("Failed to parse JSON response.")
+    else:
+        logging.error("Failed to send GraphQL request. Status code: %s",
+                      response.status_code)
+    return None
+
+
+def download(product, version, token):
+    data_json = products(token)
+    if not data_json:
+        logging.error("No products found")
+        return 1
+    product_id, sbom_id = match_product_sbom_id(data_json, product, version)
+    if not product_id or not sbom_id:
+        logging.error("No match with name %s, version %s", product, version)
+        return 1
+
+    sbom = download_sbom(product_id, sbom_id, token)
+    print(sbom)
+    return 0
 
 
 def print_products(token):
@@ -199,9 +304,32 @@ def setup_args():
                                  help="Security token")
 
     upload_parser = subparsers.add_parser("upload", help="Upload SBOM")
-    upload_parser.add_argument("--sbom", required=True, help="SBOM path")
     upload_parser.add_argument("--prod", required=True, help="Product name")
+    upload_parser.add_argument("--sbom", required=True, help="SBOM path")
     upload_parser.add_argument("--token",
+                               required=False,
+                               help="Security token")
+
+    download_parser = subparsers.add_parser("download", help="Download SBOM")
+    download_parser.add_argument("--prod", required=True, help="Product name")
+    download_parser.add_argument("--ver", required=True, help="Version")
+    download_parser.add_argument("--token",
+                                 required=False,
+                                 help="Security token")
+
+    sign_parser = subparsers.add_parser("sign", help="Sign SBOM")
+    sign_parser.add_argument("--prod", required=True, help="Product name")
+    sign_parser.add_argument("--ver", required=True, help="Product version")
+    sign_parser.add_argument("--key", required=True, help="Private key")
+    sign_parser.add_argument("--token",
+                             required=False,
+                             help="Security token")
+
+    verify_parser = subparsers.add_parser("verify", help="Verify signature")
+    verify_parser.add_argument("--prod", required=True, help="Product name")
+    verify_parser.add_argument("--ver", required=True, help="Product version")
+    verify_parser.add_argument("--key", required=True, help="Public key")
+    verify_parser.add_argument("--token",
                                required=False,
                                help="Security token")
 
@@ -242,12 +370,23 @@ def main() -> int:
     if hasattr(args, 'token') and args.token is not None:
         token = args.token
 
-    if args.subcommand == "upload":
-        logging.info("Uploading SBOM %s for product %s", args.sbom, args.prod)
-        return upload_sbom(args.sbom, args.prod, token)
     if args.subcommand == "prods":
         logging.info("Fetching Product list")
         return print_products(token)
+    if args.subcommand == "upload":
+        logging.info("Uploading SBOM %s for product %s", args.sbom, args.prod)
+        return upload_sbom(args.sbom, args.prod, token)
+    if args.subcommand == "download":
+        logging.info("Downloading SBOM %s for product %s, version %s",
+                     args.prod,
+                     args.ver,
+                     args.token)
+        return download(args.prod, args.ver, token)
+
+    if args.subcommand in ["sign", "verify"]:
+        logging.error("Not implemented")
+        return 1
+
     logging.error("Missing or invalid command. \
                   Supported commands: {upload,prods}")
     return 1
