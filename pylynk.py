@@ -11,6 +11,7 @@ import base64
 import requests
 import paramiko
 import hashlib
+from paramiko.message import Message
 
 INTERLYNK_API_URL = 'https://api.interlynk.io/lynkapi'
 INTERLYNK_API_TIMEOUT = 100
@@ -267,7 +268,6 @@ def download(product, version, token):
 
 
 def sign(product, version, pem_file, token):
-
     mykey = paramiko.RSAKey(filename=pem_file, password=None)
     data_json = products(token)
     if not data_json:
@@ -279,25 +279,52 @@ def sign(product, version, pem_file, token):
         return 1
 
     sbom = download_sbom(product_id, sbom_id, token)
+    if not sbom:
+        logging.error("SBOM content is empty")
+        return 1
+
+    signature_message = mykey.sign_ssh_data(sbom)
+    logging.debug("Signature (Message encoded): %s", signature_message)
+    signature = signature_message.asbytes()
+    encoded_signature = base64.b64encode(signature)
+    print(encoded_signature.decode('utf-8'))
+
+    return 0
+
+
+def validate(product, version, pem_file, signature, token):
+    mykey = paramiko.RSAKey(filename=pem_file, password=None)
+    data_json = products(token)
+    if not data_json:
+        logging.error("No products found")
+        return 1
+    product_id, sbom_id = match_product_sbom_id(data_json, product, version)
+    if not product_id or not sbom_id:
+        logging.error("No match with name %s, version %s", product, version)
+        return 1
+
+    sbom = download_sbom(product_id, sbom_id, token)
+    if not sbom:
+        logging.error("SBOM content is empty")
+        return 1
+
     hash_obj = hashlib.sha256()
     hash_obj.update(sbom)
     data_hash = hash_obj.digest()
+    logging.debug("Data hash: %s, signature: %s", data_hash, base64.b64decode(signature))
 
-    print("Signature (base64 encoded):", data_hash)
+    try:
+        if mykey.verify_ssh_sig(sbom, Message(base64.b64decode(signature))):
+            print("Signature is valid")
+            return True
+        else:
+            print("Signature is not valid")
+            return 1
+    except Exception as e:
+        logging.error(f"Error validating signature: {str(e)}")
+        return 1
 
-    signature_message = mykey.sign_ssh_data(data_hash)
-
-    # Extract the signature bytes from the Message object
-    signature_bytes = signature_message.get_binary()
-
-    print("Signature (base64 encoded):", signature_bytes)
-
-    # Convert the signature bytes to a base64-encoded string
-    signature_base64 = base64.b64encode(signature_bytes).decode('utf-8')
-
-    print("Signature (base64 encoded):", signature_base64)
     return 0
-
 
 def print_products(token):
     """
@@ -363,6 +390,7 @@ def setup_args():
     verify_parser.add_argument("--prod", required=True, help="Product name")
     verify_parser.add_argument("--ver", required=True, help="Product version")
     verify_parser.add_argument("--key", required=True, help="Public key")
+    verify_parser.add_argument("--signature", required=True, help="Signature")
     verify_parser.add_argument("--token",
                                required=False,
                                help="Security token")
@@ -422,6 +450,18 @@ def main() -> int:
                      args.ver,
                      args.token)
         return sign(args.prod, args.ver, args.key, token)
+    if args.subcommand == "verify":
+        logging.info("Verifying SBOM %s for product %s, version %s",
+                     args.prod,
+                     args.ver,
+                     args.signature,
+                     args.token)
+        return validate(args.prod, args.ver, args.key, args.signature, token)
+
+
+    if args.subcommand in ["sign", "verify"]:
+        logging.error("Not implemented")
+        return 1
 
     if args.subcommand in ["sign", "verify"]:
         logging.error("Not implemented")
