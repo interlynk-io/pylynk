@@ -88,6 +88,16 @@ QUERY_PROJECT_PARAMS = {
 
 
 def match_product_id(data_json, product):
+    """
+    Finds the ID of a product in the Interlynk API response.
+
+    Args:
+      data_json (dict): The JSON response from the Interlynk API.
+      product (str): The name of the product to find.
+
+    Returns:
+      str: The ID of the product, or None if not found.
+    """
     for node in data_json["data"]["projects"]["nodes"]:
         if node["name"] == product:
             return node["id"]
@@ -95,7 +105,19 @@ def match_product_id(data_json, product):
 
 
 def match_product_sbom_id(data_json, product, version):
+    """
+    Finds the ID of a product and its corresponding SBOM in the
+    Interlynk API response.
 
+    Args:
+      data_json (dict): The JSON response from the Interlynk API.
+      product (str): The name of the product to find.
+      version (str): The version of the product to find.
+
+    Returns:
+      Tuple[str, str]: The ID of the product and the ID of its
+      corresponding SBOM, or (None, None) if not found.
+    """
     for node in data_json["data"]["projects"]["nodes"]:
         if node["name"] == product:
             sbom_list = node["sboms"]
@@ -251,6 +273,18 @@ def download_sbom(product_id, sbom_id, token):
 
 
 def download(product, version, token):
+    """
+    Downloads an SBOM file for a given product and version using the
+    provided authentication token.
+
+    Args:
+      product (str): The name of the product to download the SBOM for.
+      version (str): The version of the product to download the SBOM for.
+      token (str): The authentication token to use for the API request.
+
+    Returns:
+      0 for success, 1 otherwise
+    """
     data_json = products(token)
     if not data_json:
         logging.error("No products found")
@@ -297,7 +331,6 @@ def setup_args():
     parser.add_argument('--verbose', '-v', action='count', default=0)
 
     subparsers = parser.add_subparsers(title="subcommands", dest="subcommand")
-
     products_parser = subparsers.add_parser("prods", help="List products")
     products_parser.add_argument("--token",
                                  required=False,
