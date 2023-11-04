@@ -1,3 +1,18 @@
+# Copyright 2023 Interlynk.io
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
 """
 This module contains functions for interacting with the Interlynk API.
 """
@@ -8,9 +23,9 @@ import json
 import argparse
 import logging
 import base64
+import hashlib
 import requests
 import paramiko
-import hashlib
 from paramiko.message import Message
 
 INTERLYNK_API_URL = 'https://api.interlynk.io/lynkapi'
@@ -90,6 +105,16 @@ QUERY_PROJECT_PARAMS = {
 
 
 def match_product_id(data_json, product):
+    """
+    Matches the product name with the corresponding product ID.
+
+    Args:
+      data_json (dict): The JSON response from the Interlynk API.
+      product (str): The name of the product to match.
+
+    Returns:
+      str: The ID of the matched product, or None if no match was found.
+    """
     for node in data_json["data"]["projects"]["nodes"]:
         if node["name"] == product:
             return node["id"]
@@ -97,11 +122,23 @@ def match_product_id(data_json, product):
 
 
 def match_product_sbom_id(data_json, product, version):
+    """
+    Matches the product name and version with the corresponding
+    product ID and SBOM ID.
 
+    Args:
+      data_json (dict): The JSON response from the Interlynk API.
+      product (str): The name of the product to match.
+      version (str): The version of the product to match.
+
+    Returns:
+      Tuple[str, str]: A tuple containing the ID of the matched product
+      and the ID of the matched SBOM,
+      or (None, None) if no match was found.
+    """
     for node in data_json["data"]["projects"]["nodes"]:
         if node["name"] == product:
-            sbom_list = node["sboms"]
-            for sbom in sbom_list:
+            for sbom in node["sboms"]:
                 sbom_component = sbom["primaryComponent"]
                 if sbom_component["version"] == version:
                     return node["id"], sbom["id"]
@@ -243,7 +280,7 @@ def download_sbom(product_id, sbom_id, token):
             b64data = data.get("data", {}).get("sbom", {}).get("download")
             decoded_content = base64.b64decode(b64data)
             logging.debug('Completed download and decoding')
-            return decoded_content
+            return decoded_content.decode('utf-8')
         except json.JSONDecodeError:
             logging.error("Failed to parse JSON response.")
     else:
@@ -253,6 +290,18 @@ def download_sbom(product_id, sbom_id, token):
 
 
 def download(product, version, token):
+    """
+    Downloads an SBOM file for a given product and version using the
+    provided authentication token.
+
+    Args:
+      product (str): The name of the product to download the SBOM for.
+      version (str): The version of the product to download the SBOM for.
+      token (str): The authentication token to use for the API request.
+
+    Returns:
+      0 for success, 1 otherwise
+    """
     data_json = products(token)
     if not data_json:
         logging.error("No products found")
@@ -268,7 +317,6 @@ def download(product, version, token):
 
 
 def sign(product, version, pem_file, token):
-    mykey = paramiko.RSAKey(filename=pem_file, password=None)
     data_json = products(token)
     if not data_json:
         logging.error("No products found")
@@ -283,7 +331,9 @@ def sign(product, version, pem_file, token):
         logging.error("SBOM content is empty")
         return 1
 
-    signature_message = mykey.sign_ssh_data(sbom)
+    mykey = paramiko.RSAKey(filename=pem_file, password=None)
+    # sbom = "This is sign string"
+    signature_message = mykey.sign_ssh_data(bytes(sbom, 'utf-8'))
     logging.debug("Signature (Message encoded): %s", signature_message)
     signature = signature_message.asbytes()
     encoded_signature = base64.b64encode(signature)
@@ -293,7 +343,7 @@ def sign(product, version, pem_file, token):
 
 
 def validate(product, version, pem_file, signature, token):
-    mykey = paramiko.RSAKey(filename=pem_file, password=None)
+
     data_json = products(token)
     if not data_json:
         logging.error("No products found")
@@ -302,29 +352,31 @@ def validate(product, version, pem_file, signature, token):
     if not product_id or not sbom_id:
         logging.error("No match with name %s, version %s", product, version)
         return 1
-
     sbom = download_sbom(product_id, sbom_id, token)
+    # sbom = "This is sign string"
     if not sbom:
         logging.error("SBOM content is empty")
         return 1
 
+    mykey = paramiko.RSAKey(filename=pem_file, password=None)
     hash_obj = hashlib.sha256()
-    hash_obj.update(sbom)
+    hash_obj.update(bytes(sbom, 'utf-8'))
     data_hash = hash_obj.digest()
-    logging.debug("Data hash: %s, signature: %s", data_hash, base64.b64decode(signature))
+    logging.debug("Data hash: %s, signature: %s", data_hash,
+                  base64.b64decode(signature))
 
     try:
-        if mykey.verify_ssh_sig(sbom, Message(base64.b64decode(signature))):
+        if mykey.verify_ssh_sig(bytes(sbom, 'utf-8'),
+                                Message(base64.b64decode(signature))):
             print("Signature is valid")
-            return True
         else:
             print("Signature is not valid")
-            return 1
-    except Exception as e:
-        logging.error(f"Error validating signature: {str(e)}")
+    except Exception as ex:
+        logging.error("Error validating signature: %s", str(ex))
         return 1
 
     return 0
+
 
 def print_products(token):
     """
@@ -445,27 +497,15 @@ def main() -> int:
                      args.token)
         return download(args.prod, args.ver, token)
     if args.subcommand == "sign":
-        logging.info("Signing SBOM %s for product %s, version %s",
+        logging.info("Signing SBOM for product %s, version %s",
                      args.prod,
-                     args.ver,
-                     args.token)
+                     args.ver)
         return sign(args.prod, args.ver, args.key, token)
     if args.subcommand == "verify":
-        logging.info("Verifying SBOM %s for product %s, version %s",
+        logging.info("Verifying SBOM for product %s, version %s",
                      args.prod,
-                     args.ver,
-                     args.signature,
-                     args.token)
+                     args.ver)
         return validate(args.prod, args.ver, args.key, args.signature, token)
-
-
-    if args.subcommand in ["sign", "verify"]:
-        logging.error("Not implemented")
-        return 1
-
-    if args.subcommand in ["sign", "verify"]:
-        logging.error("Not implemented")
-        return 1
 
     logging.error("Missing or invalid command. \
                   Supported commands: {upload,prods}")
