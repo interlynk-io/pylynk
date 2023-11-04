@@ -410,7 +410,6 @@ def setup_args():
     parser.add_argument('--verbose', '-v', action='count', default=0)
 
     subparsers = parser.add_subparsers(title="subcommands", dest="subcommand")
-
     products_parser = subparsers.add_parser("prods", help="List products")
     products_parser.add_argument("--token",
                                  required=False,
