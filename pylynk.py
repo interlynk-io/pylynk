@@ -23,7 +23,6 @@ import json
 import argparse
 import logging
 import base64
-import hashlib
 import requests
 import paramiko
 from paramiko.message import Message
@@ -104,45 +103,80 @@ QUERY_PROJECT_PARAMS = {
     }
 
 
-def match_product_id(data_json, product):
+def product_index(data_json, product):
     """
-    Matches the product name with the corresponding product ID.
+    Finds the index of the project node in the given JSON response
+    that matches the given product name.
 
     Args:
       data_json (dict): The JSON response from the Interlynk API.
       product (str): The name of the product to match.
 
     Returns:
-      str: The ID of the matched product, or None if no match was found.
+      int or None: The index of the matched project node, or
+      None if no match was found.
     """
-    for node in data_json["data"]["projects"]["nodes"]:
-        if node["name"] == product:
-            return node["id"]
-    return None
+    return next((index for index, node in enumerate(
+        data_json["data"]["projects"]["nodes"]
+    ) if node["name"] == product), None)
 
 
-def match_product_sbom_id(data_json, product, version):
+def product_node(data_json, index):
     """
-    Matches the product name and version with the corresponding
-    product ID and SBOM ID.
+    Returns the project node at the given index in the JSON response.
+
+    Args:
+      data_json (dict): The JSON response from the Interlynk API.
+      index (int): The index of the project node to return.
+
+    Returns:
+      dict: The project node at the given index.
+    """
+    return data_json['data']['projects']['nodes'][index]
+
+
+def product_version_index(data_json, product, version):
+    """
+    Finds the index of the version node in the given JSON response
+    that matches the given product name and version number.
 
     Args:
       data_json (dict): The JSON response from the Interlynk API.
       product (str): The name of the product to match.
-      version (str): The version of the product to match.
+      version (str): The version number to match.
 
     Returns:
-      Tuple[str, str]: A tuple containing the ID of the matched product
-      and the ID of the matched SBOM,
-      or (None, None) if no match was found.
+      tuple[int, int] or tuple[None, None]: A tuple containing the
+        indices of the matched product and version nodes, or (None, None)
+        if no match was found.
     """
-    for node in data_json["data"]["projects"]["nodes"]:
-        if node["name"] == product:
-            for sbom in node["sboms"]:
-                sbom_component = sbom["primaryComponent"]
-                if sbom_component["version"] == version:
-                    return node["id"], sbom["id"]
-    return None, None
+    prod_idx = product_index(data_json, product)
+    if prod_idx is None:
+        return (None, None)
+
+    prod = product_node(data_json, prod_idx)
+
+    return next(((prod_idx, index) for index, sbom in enumerate(
+        prod['sboms']
+    ) if sbom.get('primaryComponent') and
+       sbom['primaryComponent']['version'] == version),
+       (None, None))
+
+
+def version_node(data_json, prod_idx, version_idx):
+    """
+    Returns the version node at the given index in the JSON response.
+
+    Args:
+      data_json (dict): The JSON response from the Interlynk API.
+      prod_idx (int): The index of the product containing version node.
+      version_idx (int): The index of the version node to return.
+
+    Returns:
+      dict: The version node at the given index.
+    """
+    prod_node = product_node(data_json, prod_idx)
+    return prod_node['sboms'][version_idx]
 
 
 def products(token):
@@ -193,10 +227,16 @@ def upload_sbom(file, product, token):
         return 1
 
     data_json = products(token)
-    if data_json is None:
+    prod_idx = product_index(data_json, product)
+    if prod_idx is None:
         logging.error("No product found with the name %s", product)
         return 1
-    product_id = match_product_id(data_json, product)
+    prod = product_node(data_json, prod_idx)
+    product_id = prod.get('id', None)
+    if not product_id:
+        logging.error("Could not resolve to product ID %s", prod)
+        return 1
+
     logging.debug("Uploading SBOM to product ID %s", product_id)
 
     headers = {
@@ -233,19 +273,30 @@ def upload_sbom(file, product, token):
     return 1
 
 
-def download_sbom(product_id, sbom_id, token):
-    """
-    Downloads an SBOM file from using the provided authentication token.
+def download_sbom(product, version, token):
 
-    Args:
-      token (str): The authentication token to use for the API request.
+    data_json = products(token)
+    if not data_json:
+        logging.error("No product found with the name %s", product)
+        return 1
+    prod_idx, version_idx = product_version_index(data_json, product, version)
+    if prod_idx is None or version_idx is None:
+        logging.error("No match with name %s, version %s", product, version)
+        return 1
 
-    Returns:
-      The downloaded SBOM file as a or None if the download failed.
-    """
+    product_id = product_node(data_json, prod_idx).get('id', None)
+    version_id = version_node(data_json, prod_idx, version_idx).get('id', None)
+
+    if not product_id or not version_id:
+        logging.error("Product id or sbom ID is null: %s, %s",
+                      product_id, version_id)
+        return None
+    logging.debug("Downloading SBOM for product ID %s, sbom ID %s",
+                  product_id, version_id)
+
     variables = {
         "projectId": product_id,
-        "sbomId": sbom_id,
+        "sbomId": version_id,
         "spec": "cyclonedx",
         "format": "json",
         "includeVulns": False,
@@ -270,7 +321,6 @@ def download_sbom(product_id, sbom_id, token):
     if response.status_code == 200:
         try:
             data = response.json()
-
             if "errors" in data:
                 logging.error("GraphQL response contains errors:")
                 for error in data["errors"]:
@@ -302,83 +352,81 @@ def download(product, version, token):
     Returns:
       0 for success, 1 otherwise
     """
-    data_json = products(token)
-    if not data_json:
-        logging.error("No products found")
-        return 1
-    product_id, sbom_id = match_product_sbom_id(data_json, product, version)
-    if not product_id or not sbom_id:
-        logging.error("No match with name %s, version %s", product, version)
+
+    sbom = download_sbom(product, version, token)
+    if sbom is None:
+        logging.error("Error fetching SBOM")
         return 1
 
-    sbom = download_sbom(product_id, sbom_id, token)
     print(sbom)
     return 0
 
 
 def sign(product, version, pem_file, token):
-    data_json = products(token)
-    if not data_json:
-        logging.error("No products found")
-        return 1
-    product_id, sbom_id = match_product_sbom_id(data_json, product, version)
-    if not product_id or not sbom_id:
-        logging.error("No match with name %s, version %s", product, version)
-        return 1
+    """
+    Signs the SBOM file for a given product and version using the provided
+    authentication token and private key file.
 
-    sbom = download_sbom(product_id, sbom_id, token)
+    Args:
+      product (str): The name of the product to sign the SBOM for.
+      version (str): The version of the product to sign the SBOM for.
+      pem_file (str): The path to the private key file to use for signing.
+      token (str): The authentication token to use for the API request.
+
+    Returns:
+      The base64-encoded signature for the SBOM file,
+      or None if signing failed.
+    """
+    sbom = download_sbom(product, version, token)
     if not sbom:
         logging.error("SBOM content is empty")
         return 1
 
-    mykey = paramiko.RSAKey(filename=pem_file, password=None)
-    # sbom = "This is sign string"
-    signature_message = mykey.sign_ssh_data(bytes(sbom, 'utf-8'))
-    logging.debug("Signature (Message encoded): %s", signature_message)
-    signature = signature_message.asbytes()
-    encoded_signature = base64.b64encode(signature)
-    print(encoded_signature.decode('utf-8'))
+    rsa_key = paramiko.RSAKey(filename=pem_file, password=None)
+    signature = rsa_key.sign_ssh_data(bytes(sbom, 'utf-8'))
+    signature_text = base64.b64encode(signature.asbytes()).decode('utf-8')
+    print(signature_text)
+    if rsa_key.verify_ssh_sig(bytes(sbom, 'utf-8'),
+                              Message(base64.b64decode(signature_text))):
+        print("Signature is valid")
+    else:
+        print("Signature is not valid")
 
     return 0
 
 
-def validate(product, version, pem_file, signature, token):
+def verify(product, version, pem_file, signature, token):
+    """
+    Validates the signature of the SBOM file for a given product and
+    version using the provided authentication token and public key file.
 
-    data_json = products(token)
-    if not data_json:
-        logging.error("No products found")
-        return 1
-    product_id, sbom_id = match_product_sbom_id(data_json, product, version)
-    if not product_id or not sbom_id:
-        logging.error("No match with name %s, version %s", product, version)
-        return 1
-    sbom = download_sbom(product_id, sbom_id, token)
-    # sbom = "This is sign string"
+    Args:
+      product (str): The product name to validate the SBOM signature for.
+      version (str): The product version to validate the SBOM signature for.
+      pem_file (str): The public key file to use for signature validation.
+      signature (str): The base64-encoded signature to validate.
+      token (str): The authentication token to use for the API request.
+
+    Returns:
+      0 for success, 1 otherwise
+    """
+
+    sbom = download_sbom(product, version, token)
     if not sbom:
         logging.error("SBOM content is empty")
         return 1
 
-    mykey = paramiko.RSAKey(filename=pem_file, password=None)
-    hash_obj = hashlib.sha256()
-    hash_obj.update(bytes(sbom, 'utf-8'))
-    data_hash = hash_obj.digest()
-    logging.debug("Data hash: %s, signature: %s", data_hash,
-                  base64.b64decode(signature))
-
-    try:
-        if mykey.verify_ssh_sig(bytes(sbom, 'utf-8'),
-                                Message(base64.b64decode(signature))):
-            print("Signature is valid")
-        else:
-            print("Signature is not valid")
-    except Exception as ex:
-        logging.error("Error validating signature: %s", str(ex))
-        return 1
+    rsa_key = paramiko.RSAKey(filename=pem_file, password=None)
+    if rsa_key.verify_ssh_sig(bytes(sbom, 'utf-8'),
+                              Message(base64.b64decode(signature))):
+        print("Signature is valid")
+    else:
+        print("Signature is not valid")
 
     return 0
 
 
-def print_products(token):
+def list_products(token):
     """
     Print the Interlynk list of products using the provided token.
 
@@ -388,14 +436,15 @@ def print_products(token):
     Returns:
       0 for success 1 otherwise
     """
-    products_map = products(token)
-    if not products_map:
+    products_json = products(token)
+    if not products_json:
         logging.error("No products found")
         return 1
 
+    prod_nodes = products_json['data']['projects']['nodes']
     print("ID\t\t\t\t\tPRODUCT NAME")
-    for prod_name, prod_id in products_map.items():
-        print(f"{prod_id}\t{prod_name}")
+    for prod in prod_nodes:
+        print(f"{prod['id']}\t{prod['name']}")
     return 0
 
 
@@ -484,30 +533,31 @@ def main() -> int:
         token = args.token
 
     if args.subcommand == "prods":
-        logging.info("Fetching Product list")
-        return print_products(token)
+        logging.debug("Fetching Product list")
+        return list_products(token)
     if args.subcommand == "upload":
-        logging.info("Uploading SBOM %s for product %s", args.sbom, args.prod)
+        logging.debug("Uploading SBOM %s for product %s", args.sbom, args.prod)
         return upload_sbom(args.sbom, args.prod, token)
     if args.subcommand == "download":
-        logging.info("Downloading SBOM %s for product %s, version %s",
-                     args.prod,
-                     args.ver,
-                     args.token)
+        logging.debug("Downloading SBOM %s for product %s, version %s",
+                      args.prod,
+                      args.ver,
+                      args.token)
         return download(args.prod, args.ver, token)
     if args.subcommand == "sign":
-        logging.info("Signing SBOM for product %s, version %s",
-                     args.prod,
-                     args.ver)
+        logging.debug("Signing SBOM for product %s, version %s",
+                      args.prod,
+                      args.ver)
         return sign(args.prod, args.ver, args.key, token)
     if args.subcommand == "verify":
-        logging.info("Verifying SBOM for product %s, version %s",
-                     args.prod,
-                     args.ver)
-        return validate(args.prod, args.ver, args.key, args.signature, token)
+        logging.debug("Verifying SBOM for product %s, version %s",
+                      args.prod,
+                      args.ver)
+        return verify(args.prod, args.ver, args.key, args.signature,
+                      token)
 
     logging.error("Missing or invalid command. \
-                  Supported commands: {upload,prods}")
+                  Supported commands: {prods, upload, download, sign, verify}")
     return 1
 
 
