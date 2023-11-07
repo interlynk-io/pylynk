@@ -210,7 +210,7 @@ def products(token):
     return None
 
 
-def upload_sbom(file, product, token):
+def upload(file, product, token):
     """
     Uploads an SBOM file to a product using the Interlynk API.
 
@@ -274,18 +274,30 @@ def upload_sbom(file, product, token):
 
 
 def download_sbom(product, version, token):
+    """
+    Downloads an SBOM file for a specific product and version
 
-    data_json = products(token)
-    if not data_json:
+    Args:
+      product (str): The name of the product to download the SBOM for.
+      version (str): The version of the product to download the SBOM for.
+      token (str): The authentication token to use for the API request.
+
+    Returns:
+      The SBOM file contents as a string, or None if the download failed.
+    """
+    products_json = products(token)
+    if not products_json:
         logging.error("No product found with the name %s", product)
         return 1
-    prod_idx, version_idx = product_version_index(data_json, product, version)
-    if prod_idx is None or version_idx is None:
+    prod_idx, ver_idx = product_version_index(products_json,
+                                              product,
+                                              version)
+    if prod_idx is None or ver_idx is None:
         logging.error("No match with name %s, version %s", product, version)
         return 1
 
-    product_id = product_node(data_json, prod_idx).get('id', None)
-    version_id = version_node(data_json, prod_idx, version_idx).get('id', None)
+    product_id = product_node(products_json, prod_idx).get('id', None)
+    version_id = version_node(products_json, prod_idx, ver_idx).get('id', None)
 
     if not product_id or not version_id:
         logging.error("Product id or sbom ID is null: %s, %s",
@@ -448,6 +460,37 @@ def list_products(token):
     return 0
 
 
+def list_versions(token, prod):
+    """
+    Lists the available versions for a given product.
+
+    Args:
+      token (str): The authentication token to use for the API request.
+      prod (str): The name of the product to list versions for.
+
+    Returns:
+      int: 0 for success, 1 otherwise
+    """
+    products_json = products(token)
+    if not products_json:
+        logging.error("No products found")
+        return 1
+
+    prod_idx = product_index(products_json, prod)
+    if prod_idx is None:
+        logging.error("No match with name %s", prod)
+        return 1
+
+    product = product_node(products_json, prod_idx)
+    print("ID\t\t\t\t\tVERSION NAME")
+    for sbom in product['sboms']:
+        if sbom.get('primaryComponent') is None:
+            continue
+        version = sbom.get('primaryComponent').get('version', None)
+        print(f"{sbom['id']}\t{version}")
+    return 0
+
+
 def setup_args():
     """
     Setup command line arguments
@@ -463,6 +506,12 @@ def setup_args():
     products_parser.add_argument("--token",
                                  required=False,
                                  help="Security token")
+
+    vers_parser = subparsers.add_parser("vers", help="List Versions")
+    vers_parser.add_argument("--prod", required=True, help="Product name")
+    vers_parser.add_argument("--token",
+                             required=False,
+                             help="Security token")
 
     upload_parser = subparsers.add_parser("upload", help="Upload SBOM")
     upload_parser.add_argument("--prod", required=True, help="Product name")
@@ -532,12 +581,19 @@ def main() -> int:
     if hasattr(args, 'token') and args.token is not None:
         token = args.token
 
+    if token is None:
+        logging.error("Missing security token")
+        return 1
+
     if args.subcommand == "prods":
         logging.debug("Fetching Product list")
         return list_products(token)
+    if args.subcommand == "vers":
+        logging.debug("Fetching Version list")
+        return list_versions(token, args.prod)
     if args.subcommand == "upload":
         logging.debug("Uploading SBOM %s for product %s", args.sbom, args.prod)
-        return upload_sbom(args.sbom, args.prod, token)
+        return upload(args.sbom, args.prod, token)
     if args.subcommand == "download":
         logging.debug("Downloading SBOM %s for product %s, version %s",
                       args.prod,
