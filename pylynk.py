@@ -23,8 +23,11 @@ import json
 import argparse
 import logging
 import base64
+import datetime
 import requests
 import paramiko
+import pytz
+import tzlocal
 from paramiko.message import Message
 
 INTERLYNK_API_URL = 'https://api.interlynk.io/lynkapi'
@@ -100,7 +103,24 @@ QUERY_PROJECT_PARAMS = {
     'operationName': 'GetProjects',
     'variables': {},
     'query': QUERY_PROJECTS_LIST
-    }
+}
+
+
+def user_time(utc_time):
+    """
+    Converts a UTC timestamp to the local timezone and returns it
+    in the format 'YYYY-MM-DD HH:MM:SS TZ'.
+
+    Args:
+      utc_time (str): The UTC timestamp to convert.
+
+    Returns:
+      str: The local time in the format 'YYYY-MM-DD HH:MM:SS TZ'.
+    """
+    timestamp = datetime.datetime.fromisoformat(utc_time[:-1])
+    local_timezone = tzlocal.get_localzone()
+    local_time = timestamp.replace(tzinfo=pytz.UTC).astimezone(local_timezone)
+    return local_time.strftime('%Y-%m-%d %H:%M:%S %Z')
 
 
 def product_index(data_json, product):
@@ -321,12 +341,8 @@ def download_sbom(product, version, token):
         "variables": variables,
     }
 
-    headers = {
-      "Authorization": "Bearer " + token
-    }
-
     response = requests.post(INTERLYNK_API_URL,
-                             headers=headers,
+                             headers={"Authorization": "Bearer " + token},
                              json=request_data,
                              timeout=INTERLYNK_API_TIMEOUT)
 
@@ -454,9 +470,11 @@ def list_products(token):
         return 1
 
     prod_nodes = products_json['data']['projects']['nodes']
-    print("ID\t\t\t\t\tPRODUCT NAME")
+    print(f"{'ID':<40} {'PRODUCT NAME':<30} {'VERSIONS':<4} \
+          {'UPDATED AT'}")
     for prod in prod_nodes:
-        print(f"{prod['id']}\t{prod['name']}")
+        print(f"{prod['id']:<40} {prod['name']:<30} {len(prod['sboms']):<4} \
+              {user_time(prod['updatedAt'])}")
     return 0
 
 
@@ -482,12 +500,15 @@ def list_versions(token, prod):
         return 1
 
     product = product_node(products_json, prod_idx)
-    print("ID\t\t\t\t\tVERSION NAME")
+    print(f"{'ID':<40} {'VERSION':<20} {'PRIMARY COMPONENT':<30}\
+          {'UPDATED AT':<20}")
     for sbom in product['sboms']:
         if sbom.get('primaryComponent') is None:
             continue
         version = sbom.get('primaryComponent').get('version', None)
-        print(f"{sbom['id']}\t{version}")
+        primary_component = sbom.get('primaryComponent').get('name', None)
+        print(f"{sbom['id']:<40} {version:<20} {primary_component:<30} \
+              {user_time(sbom['updatedAt']):<20}")
     return 0
 
 
