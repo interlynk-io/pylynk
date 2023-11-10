@@ -123,39 +123,40 @@ def user_time(utc_time):
     return local_time.strftime('%Y-%m-%d %H:%M:%S %Z')
 
 
-def product_index(data_json, product):
+def product_by_name(data_json, prod_name):
     """
-    Finds the index of the project node in the given JSON response
-    that matches the given product name.
+    Returns the project node by name from JSON data
+
+    Args:
+      data_json (dict): The JSON data to search.
+      prod_name (str): The name of the project to find.
+
+    Returns:
+      dict or None: The project node or None if not found.
+    """
+    nodes = data_json["data"]["projects"]["nodes"]
+    return next((node for node in nodes
+                 if node["name"] == prod_name), None)
+
+
+def product_by_id(data_json, prod_id):
+    """
+    Finds the project node in the given JSON response that matches
+    the given product ID.
 
     Args:
       data_json (dict): The JSON response from the Interlynk API.
-      product (str): The name of the product to match.
+      prod_id (str): The ID of the product to match.
 
     Returns:
-      int or None: The index of the matched project node, or
-      None if no match was found.
+      dict or None: The project node that matches the given ID, or None
+        if no match was found.
     """
-    return next((index for index, node in enumerate(
-        data_json["data"]["projects"]["nodes"]
-    ) if node["name"] == product), None)
+    nodes = data_json["data"]["projects"]["nodes"]
+    return next((node for node in nodes if node["id"] == prod_id), None)
 
 
-def product_node(data_json, index):
-    """
-    Returns the project node at the given index in the JSON response.
-
-    Args:
-      data_json (dict): The JSON response from the Interlynk API.
-      index (int): The index of the project node to return.
-
-    Returns:
-      dict: The project node at the given index.
-    """
-    return data_json['data']['projects']['nodes'][index]
-
-
-def product_version_index(data_json, product, version):
+def product_version_by_name(data_json, product, version):
     """
     Finds the index of the version node in the given JSON response
     that matches the given product name and version number.
@@ -170,33 +171,13 @@ def product_version_index(data_json, product, version):
         indices of the matched product and version nodes, or (None, None)
         if no match was found.
     """
-    prod_idx = product_index(data_json, product)
-    if prod_idx is None:
-        return (None, None)
+    prod = product_by_name(data_json, product)
 
-    prod = product_node(data_json, prod_idx)
-
-    return next(((prod_idx, index) for index, sbom in enumerate(
+    return next((sbom for index, sbom in enumerate(
         prod['sboms']
     ) if sbom.get('primaryComponent') and
        sbom['primaryComponent']['version'] == version),
-       (None, None))
-
-
-def version_node(data_json, prod_idx, version_idx):
-    """
-    Returns the version node at the given index in the JSON response.
-
-    Args:
-      data_json (dict): The JSON response from the Interlynk API.
-      prod_idx (int): The index of the product containing version node.
-      version_idx (int): The index of the version node to return.
-
-    Returns:
-      dict: The version node at the given index.
-    """
-    prod_node = product_node(data_json, prod_idx)
-    return prod_node['sboms'][version_idx]
+       None)
 
 
 def products(token):
@@ -230,7 +211,7 @@ def products(token):
     return None
 
 
-def upload(file, product, token):
+def upload(file, product, product_id, token):
     """
     Uploads an SBOM file to a product using the Interlynk API.
 
@@ -247,11 +228,11 @@ def upload(file, product, token):
         return 1
 
     data_json = products(token)
-    prod_idx = product_index(data_json, product)
-    if prod_idx is None:
-        logging.error("No product found with the name %s", product)
-        return 1
-    prod = product_node(data_json, prod_idx)
+    if product_id is not None:
+        prod = product_by_id(data_json, product_id)
+    else:
+        prod = product_by_name(data_json, product)
+
     product_id = prod.get('id', None)
     if not product_id:
         logging.error("Could not resolve to product ID %s", prod)
@@ -283,6 +264,7 @@ def upload(file, product, token):
                                      files=files_map,
                                      timeout=INTERLYNK_API_TIMEOUT)
             if response.status_code == 200:
+                print('Uploaded successfully')
                 logging.debug("SBOM Uploading response: %s", response.text)
                 return 0
             logging.error("Error uploading sbom: %d", response.status_code)
@@ -309,15 +291,15 @@ def download_sbom(product, version, token):
     if not products_json:
         logging.error("No product found with the name %s", product)
         return 1
-    prod_idx, ver_idx = product_version_index(products_json,
-                                              product,
-                                              version)
-    if prod_idx is None or ver_idx is None:
+    prod, ver = product_version_by_name(products_json,
+                                        product,
+                                        version)
+    if prod is None or ver is None:
         logging.error("No match with name %s, version %s", product, version)
         return 1
 
-    product_id = product_node(products_json, prod_idx).get('id', None)
-    version_id = version_node(products_json, prod_idx, ver_idx).get('id', None)
+    product_id = prod.get('id', None)
+    version_id = ver.get('id', None)
 
     if not product_id or not version_id:
         logging.error("Product id or sbom ID is null: %s, %s",
@@ -414,11 +396,11 @@ def sign(product, version, pem_file, token):
     signature = rsa_key.sign_ssh_data(bytes(sbom, 'utf-8'))
     signature_text = base64.b64encode(signature.asbytes()).decode('utf-8')
     print(signature_text)
-    if rsa_key.verify_ssh_sig(bytes(sbom, 'utf-8'),
-                              Message(base64.b64decode(signature_text))):
-        print("Signature is valid")
-    else:
-        print("Signature is not valid")
+    # if rsa_key.verify_ssh_sig(bytes(sbom, 'utf-8'),
+    #                           Message(base64.b64decode(signature_text))):
+    #     print("Signature is valid")
+    # else:
+    #     print("Signature is not valid")
 
     return 0
 
@@ -478,7 +460,7 @@ def list_products(token):
     return 0
 
 
-def list_versions(token, prod):
+def list_versions(token, prod, prod_id=None):
     """
     Lists the available versions for a given product.
 
@@ -494,12 +476,15 @@ def list_versions(token, prod):
         logging.error("No products found")
         return 1
 
-    prod_idx = product_index(products_json, prod)
-    if prod_idx is None:
-        logging.error("No match with name %s", prod)
-        return 1
+    if prod_id is not None:
+        product = product_by_id(products_json, prod_id)
+    else:
+        product = product_by_name(products_json, prod)
 
-    product = product_node(products_json, prod_idx)
+    if product is None:
+        print('No matching product')
+        return 0
+
     print(f"{'ID':<40} {'VERSION':<20} {'PRIMARY COMPONENT':<30}\
           {'UPDATED AT':<20}")
     for sbom in product['sboms']:
@@ -529,21 +514,33 @@ def setup_args():
                                  help="Security token")
 
     vers_parser = subparsers.add_parser("vers", help="List Versions")
-    vers_parser.add_argument("--prod", required=True, help="Product name")
+    vers_group = vers_parser.add_mutually_exclusive_group(required=True)
+
+    vers_group.add_argument("--prod", help="Product name")
+    vers_group.add_argument("--prodId", help="Product ID")
     vers_parser.add_argument("--token",
                              required=False,
                              help="Security token")
 
     upload_parser = subparsers.add_parser("upload", help="Upload SBOM")
-    upload_parser.add_argument("--prod", required=True, help="Product name")
+    arg_group = upload_parser.add_mutually_exclusive_group(required=True)
+    arg_group.add_argument("--prod", help="Product name")
+    arg_group.add_argument("--prodId", help="Product ID")
+
     upload_parser.add_argument("--sbom", required=True, help="SBOM path")
     upload_parser.add_argument("--token",
                                required=False,
                                help="Security token")
 
     download_parser = subparsers.add_parser("download", help="Download SBOM")
-    download_parser.add_argument("--prod", required=True, help="Product name")
-    download_parser.add_argument("--ver", required=True, help="Version")
+    arg_group = download_parser.add_mutually_exclusive_group(required=True)
+    arg_group.add_argument("--prod", help="Product name")
+    arg_group.add_argument("--prodId", help="Product ID")
+
+    arg_group = download_parser.add_mutually_exclusive_group(required=True)
+    arg_group.add_argument("--ver", help="Version")
+    arg_group.add_argument("--verId", help="Version ID")
+
     download_parser.add_argument("--token",
                                  required=False,
                                  help="Security token")
@@ -611,16 +608,16 @@ def main() -> int:
         return list_products(token)
     if args.subcommand == "vers":
         logging.debug("Fetching Version list")
-        return list_versions(token, args.prod)
+        return list_versions(token, args.prod, args.prodId)
     if args.subcommand == "upload":
         logging.debug("Uploading SBOM %s for product %s", args.sbom, args.prod)
-        return upload(args.sbom, args.prod, token)
+        return upload(args.sbom, args.prod, args.prodId, token)
     if args.subcommand == "download":
         logging.debug("Downloading SBOM %s for product %s, version %s",
                       args.prod,
                       args.ver,
                       args.token)
-        return download(args.prod, args.ver, token)
+        return download(args.prod, args.prodId, args.ver, args.verId, token)
     if args.subcommand == "sign":
         logging.debug("Signing SBOM for product %s, version %s",
                       args.prod,
