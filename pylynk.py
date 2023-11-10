@@ -134,7 +134,7 @@ def product_by_name(data_json, prod_name):
     Returns:
       dict or None: The project node or None if not found.
     """
-    nodes = data_json["data"]["projects"]["nodes"]
+    nodes = data_json['data']['projects']['nodes']
     return next((node for node in nodes
                  if node["name"] == prod_name), None)
 
@@ -156,7 +156,7 @@ def product_by_id(data_json, prod_id):
     return next((node for node in nodes if node["id"] == prod_id), None)
 
 
-def product_version_by_name(data_json, product, version):
+def product_version_by_name(data_json, prod_id, version):
     """
     Finds the index of the version node in the given JSON response
     that matches the given product name and version number.
@@ -171,12 +171,38 @@ def product_version_by_name(data_json, product, version):
         indices of the matched product and version nodes, or (None, None)
         if no match was found.
     """
-    prod = product_by_name(data_json, product)
+    prod = product_by_id(data_json, prod_id)
+    if prod is None:
+        return None
 
     return next((sbom for index, sbom in enumerate(
         prod['sboms']
     ) if sbom.get('primaryComponent') and
        sbom['primaryComponent']['version'] == version),
+       None)
+
+
+def product_version_by_id(data_json, product_id, version_id):
+    """
+    Finds the index of the version node in the given JSON response
+    that matches the given product ID and version number.
+
+    Args:
+      data_json (dict): The JSON response from the Interlynk API.
+      product_id (str): The ID of the product to match.
+      version_id (str): The version number to match.
+
+    Returns:
+      tuple[int, int] or tuple[None, None]: A tuple containing the
+        indices of the matched product and version nodes, or (None, None)
+        if no match was found.
+    """
+    prod = product_by_id(data_json, product_id)
+
+    return next((sbom for index, sbom in enumerate(
+        prod['sboms']
+    ) if sbom.get('primaryComponent') and
+       sbom['primaryComponent']['version'] == version_id),
        None)
 
 
@@ -211,7 +237,7 @@ def products(token):
     return None
 
 
-def upload(file, product, product_id, token):
+def upload_sbom(token, product_id, sbom_file):
     """
     Uploads an SBOM file to a product using the Interlynk API.
 
@@ -223,19 +249,8 @@ def upload(file, product, product_id, token):
     Returns:
       0 for success 1 otherwise
     """
-    if os.path.isfile(file) is False:
-        logging.error('SBOM File not found')
-        return 1
-
-    data_json = products(token)
-    if product_id is not None:
-        prod = product_by_id(data_json, product_id)
-    else:
-        prod = product_by_name(data_json, product)
-
-    product_id = prod.get('id', None)
-    if not product_id:
-        logging.error("Could not resolve to product ID %s", prod)
+    if os.path.isfile(sbom_file) is False:
+        logging.error('SBOM File not found: %s', sbom_file)
         return 1
 
     logging.debug("Uploading SBOM to product ID %s", product_id)
@@ -256,7 +271,7 @@ def upload(file, product, product_id, token):
     }
 
     try:
-        with open(file, 'rb') as sbom:
+        with open(sbom_file, 'rb') as sbom:
             files_map = {'0': sbom}
             response = requests.post(INTERLYNK_API_URL,
                                      headers=headers,
@@ -264,6 +279,11 @@ def upload(file, product, product_id, token):
                                      files=files_map,
                                      timeout=INTERLYNK_API_TIMEOUT)
             if response.status_code == 200:
+                resp_json = response.json()
+                errors = resp_json.get('data').get('sbomUpload').get('errors')
+                if errors is not None and errors != '[]':
+                    print(f"Error uploading sbom: {errors}")
+                    return 1
                 print('Uploaded successfully')
                 logging.debug("SBOM Uploading response: %s", response.text)
                 return 0
@@ -275,7 +295,7 @@ def upload(file, product, product_id, token):
     return 1
 
 
-def download_sbom(product, version, token):
+def download(token, product_id, version_id):
     """
     Downloads an SBOM file for a specific product and version
 
@@ -287,24 +307,6 @@ def download_sbom(product, version, token):
     Returns:
       The SBOM file contents as a string, or None if the download failed.
     """
-    products_json = products(token)
-    if not products_json:
-        logging.error("No product found with the name %s", product)
-        return 1
-    prod, ver = product_version_by_name(products_json,
-                                        product,
-                                        version)
-    if prod is None or ver is None:
-        logging.error("No match with name %s, version %s", product, version)
-        return 1
-
-    product_id = prod.get('id', None)
-    version_id = ver.get('id', None)
-
-    if not product_id or not version_id:
-        logging.error("Product id or sbom ID is null: %s, %s",
-                      product_id, version_id)
-        return None
     logging.debug("Downloading SBOM for product ID %s, sbom ID %s",
                   product_id, version_id)
 
@@ -337,7 +339,11 @@ def download_sbom(product, version, token):
                     logging.error(error["message"])
                 return None
 
-            b64data = data.get("data", {}).get("sbom", {}).get("download")
+            sbom = data.get('data', {}).get('sbom', {})
+            if sbom is None:
+                print('No SBOM matched with the given ID')
+                return None
+            b64data = sbom.get('download')
             decoded_content = base64.b64decode(b64data)
             logging.debug('Completed download and decoding')
             return decoded_content.decode('utf-8')
@@ -349,7 +355,7 @@ def download_sbom(product, version, token):
     return None
 
 
-def download(product, version, token):
+def download_sbom(token, product_id, version_id):
     """
     Downloads an SBOM file for a given product and version using the
     provided authentication token.
@@ -363,7 +369,7 @@ def download(product, version, token):
       0 for success, 1 otherwise
     """
 
-    sbom = download_sbom(product, version, token)
+    sbom = download(token, product_id, version_id)
     if sbom is None:
         logging.error("Error fetching SBOM")
         return 1
@@ -372,7 +378,7 @@ def download(product, version, token):
     return 0
 
 
-def sign(product, version, pem_file, token):
+def print_signature(token, product_id, ver_id, pem_file):
     """
     Signs the SBOM file for a given product and version using the provided
     authentication token and private key file.
@@ -387,7 +393,7 @@ def sign(product, version, pem_file, token):
       The base64-encoded signature for the SBOM file,
       or None if signing failed.
     """
-    sbom = download_sbom(product, version, token)
+    sbom = download_sbom(token, product_id, ver_id)
     if not sbom:
         logging.error("SBOM content is empty")
         return 1
@@ -405,23 +411,22 @@ def sign(product, version, pem_file, token):
     return 0
 
 
-def verify(product, version, pem_file, signature, token):
+def verify_signature(token, product_id, version_id, signature, pem_file):
     """
-    Validates the signature of the SBOM file for a given product and
-    version using the provided authentication token and public key file.
+    Verifies the signature of an SBOM for a given product and version using
+    the provided authentication token, signature, and public key file.
 
     Args:
-      product (str): The product name to validate the SBOM signature for.
-      version (str): The product version to validate the SBOM signature for.
-      pem_file (str): The public key file to use for signature validation.
-      signature (str): The base64-encoded signature to validate.
       token (str): The authentication token to use for the API request.
+      product_id (str): The ID of the product to verify the SBOM signature for.
+      version_id (str): The ID of the version to verify the SBOM signature for.
+      signature (str): The base64-encoded signature to verify.
+      pem_file (str): The path to the public key file to use for verification.
 
     Returns:
       0 for success, 1 otherwise
     """
-
-    sbom = download_sbom(product, version, token)
+    sbom = download_sbom(token, product_id, version_id)
     if not sbom:
         logging.error("SBOM content is empty")
         return 1
@@ -436,7 +441,7 @@ def verify(product, version, pem_file, signature, token):
     return 0
 
 
-def list_products(token):
+def print_products(token):
     """
     Print the Interlynk list of products using the provided token.
 
@@ -452,21 +457,49 @@ def list_products(token):
         return 1
 
     prod_nodes = products_json['data']['projects']['nodes']
-    print(f"{'ID':<40} {'PRODUCT NAME':<30} {'VERSIONS':<4} \
-          {'UPDATED AT'}")
+
+    # Calculate dynamic column widths
+    name_width = max(len("NAME"), max(len(prod['name'])
+                                      for prod in prod_nodes))
+    versions_width = max(len("VERSIONS"), max(len(str(len(prod['sboms'])))
+                                              for prod in prod_nodes))
+    updated_at_width = max(len("UPDATED AT"),
+                           max(len(user_time(prod['updatedAt']))
+                               for prod in prod_nodes))
+    id_width = max(len("ID"), max(len(prod['id']) for prod in prod_nodes))
+
+    header = (
+        f"{ 'NAME':<{name_width}} | "
+        f"{ 'VERSIONS':<{versions_width}} | "
+        f"{ 'UPDATED AT':<{updated_at_width}} | "
+        f"{ 'ID':<{id_width}}"
+    )
+    print(header)
+
+    # Add a horizontal line after the header
+    # 8 is the total length of separators and spaces
+    width = sum([name_width, versions_width, updated_at_width, id_width]) + 8
+    line = "-" * width
+    print(line)
+
     for prod in prod_nodes:
-        print(f"{prod['id']:<40} {prod['name']:<30} {len(prod['sboms']):<4} \
-              {user_time(prod['updatedAt'])}")
+        row = (
+            f"{prod['name']:<{name_width}} | "
+            f"{len(prod['sboms']):<{versions_width}} | "
+            f"{user_time(prod['updatedAt']):<{updated_at_width}} | "
+            f"{prod['id']:<{id_width}}"
+        )
+        print(row)
     return 0
 
 
-def list_versions(token, prod, prod_id=None):
+def print_versions(token, prod_id):
     """
     Lists the available versions for a given product.
 
     Args:
       token (str): The authentication token to use for the API request.
-      prod (str): The name of the product to list versions for.
+      prod_id (str): The ID of the product to list versions for.
 
     Returns:
       int: 0 for success, 1 otherwise
@@ -476,24 +509,57 @@ def list_versions(token, prod, prod_id=None):
         logging.error("No products found")
         return 1
 
-    if prod_id is not None:
-        product = product_by_id(products_json, prod_id)
-    else:
-        product = product_by_name(products_json, prod)
-
-    if product is None:
+    product_node = product_by_id(products_json, prod_id)
+    if product_node is None:
         print('No matching product')
         return 0
 
-    print(f"{'ID':<40} {'VERSION':<20} {'PRIMARY COMPONENT':<30}\
-          {'UPDATED AT':<20}")
-    for sbom in product['sboms']:
+    # Calculate dynamic column widths
+    id_width = max(len("ID"), max(len(sbom['id'])
+                                  for sbom in product_node['sboms']))
+    version_width = max(len("VERSION"),
+                        max(len(s.get('primaryComponent', {})
+                                .get('version', ''))
+                        for s in product_node['sboms']))
+    primary_component_width = max(len("PRIMARY COMPONENT"),
+                                  max(len(sbom.get('primaryComponent', {})
+                                          .get('name', ''))
+                                      for sbom in product_node['sboms']))
+    updated_at_width = max(len("UPDATED AT"),
+                           max(len(user_time(sbom['updatedAt']))
+                               for sbom in product_node['sboms']))
+
+    # Format the header with dynamic column widths
+    header = (
+        f"{'ID':<{id_width}} | "
+        f"{'VERSION':<{version_width}} | "
+        f"{'PRIMARY COMPONENT':<{primary_component_width}} | "
+        f"{'UPDATED AT':<{updated_at_width}}"
+    )
+    print(header)
+
+    # Add a horizontal line after the header
+    # 12 is the total length of separators and spaces
+    width = sum([id_width, version_width,
+                 primary_component_width,
+                 updated_at_width]) + 12
+    line = "-" * width
+    print(line)
+
+    # Format each row with dynamic column widths and a bar between elements
+    for sbom in product_node['sboms']:
         if sbom.get('primaryComponent') is None:
             continue
-        version = sbom.get('primaryComponent').get('version', None)
-        primary_component = sbom.get('primaryComponent').get('name', None)
-        print(f"{sbom['id']:<40} {version:<20} {primary_component:<30} \
-              {user_time(sbom['updatedAt']):<20}")
+        version = sbom.get('primaryComponent', {}).get('version', '')
+        primary_component = sbom.get('primaryComponent', {}).get('name', '')
+        row = (
+            f"{sbom['id']:<{id_width}} | "
+            f"{version:<{version_width}} | "
+            f"{primary_component:<{primary_component_width}} | "
+            f"{user_time(sbom['updatedAt']):<{updated_at_width}}"
+        )
+        print(row)
+
     return 0
 
 
@@ -586,6 +652,67 @@ def log_level(args):
         logging.basicConfig(level=logging.DEBUG)
 
 
+def arg_token(args):
+    """
+    Get the security token from the CLI or environment variables.
+
+    Args:
+      args (argparse.Namespace): The parsed command line arguments.
+
+    Returns:
+      str: The security token.
+    """
+    if hasattr(args, 'token') and args.token is not None:
+        return args.token
+
+    return os.environ.get("INTERLYNK_SECURITY_TOKEN")
+
+
+def arg_prod_id(args):
+    """
+    Get the product ID from the CLI or environment variables.
+
+    Args:
+      args (argparse.Namespace): The parsed command line arguments.
+
+    Returns:
+      str: The product ID.
+    """
+    if hasattr(args, 'prodId') and args.prodId is not None:
+        return args.prodId
+
+    if hasattr(args, 'prod') and args.prod is not None:
+        token = arg_token(args)
+        node = product_by_name(products(token), args.prod)
+        if node is not None:
+            return node.get('id')
+
+    return None
+
+
+def arg_ver_id(args):
+    """
+    Get the version ID from the CLI or environment variables.
+
+    Args:
+      args (argparse.Namespace): The parsed command line arguments.
+
+    Returns:
+      str: The version ID.
+    """
+    if hasattr(args, 'verId') and args.verId is not None:
+        return args.verId
+
+    if hasattr(args, 'ver') and args.ver is not None:
+        token = arg_token(args)
+        prod_id = arg_prod_id(args)
+        prod_node = product_version_by_name(products(token), prod_id, args.ver)
+        if prod_node is not None:
+            return prod_node.get('id')
+
+    return None
+
+
 def main() -> int:
     """
     Run Interlynk Commands
@@ -595,44 +722,34 @@ def main() -> int:
     """
     args = setup_args()
     log_level(args)
-    token = os.environ.get("INTERLYNK_SECURITY_TOKEN")
-    if hasattr(args, 'token') and args.token is not None:
-        token = args.token
 
-    if token is None:
-        logging.error("Missing security token")
-        return 1
+    error_code = 0
+    token = arg_token(args)
+    prod_id = arg_prod_id(args)
+    ver_id = arg_ver_id(args)
+
+    logging.debug('Token (Partial): %s ProductId: %s, VersionId: %s',
+                  token[-5:], prod_id, ver_id)
 
     if args.subcommand == "prods":
-        logging.debug("Fetching Product list")
-        return list_products(token)
-    if args.subcommand == "vers":
-        logging.debug("Fetching Version list")
-        return list_versions(token, args.prod, args.prodId)
-    if args.subcommand == "upload":
-        logging.debug("Uploading SBOM %s for product %s", args.sbom, args.prod)
-        return upload(args.sbom, args.prod, args.prodId, token)
-    if args.subcommand == "download":
-        logging.debug("Downloading SBOM %s for product %s, version %s",
-                      args.prod,
-                      args.ver,
-                      args.token)
-        return download(args.prod, args.prodId, args.ver, args.verId, token)
-    if args.subcommand == "sign":
-        logging.debug("Signing SBOM for product %s, version %s",
-                      args.prod,
-                      args.ver)
-        return sign(args.prod, args.ver, args.key, token)
-    if args.subcommand == "verify":
-        logging.debug("Verifying SBOM for product %s, version %s",
-                      args.prod,
-                      args.ver)
-        return verify(args.prod, args.ver, args.key, args.signature,
-                      token)
+        error_code = print_products(token)
+    elif args.subcommand == "vers":
+        error_code = print_versions(token, prod_id)
+    elif args.subcommand == "upload":
+        error_code = upload_sbom(token, prod_id, args.sbom)
+    elif args.subcommand == "download":
+        error_code = download_sbom(token, prod_id, ver_id)
+    elif args.subcommand == "sign":
+        error_code = print_signature(token, prod_id, ver_id, args.key)
+    elif args.subcommand == "verify":
+        error_code = verify_signature(token, prod_id, ver_id,
+                                      args.key, args.signature)
+    else:
+        print("Missing or invalid command. \
+              Supported commands: {prods, upload, download, sign, verify}")
+        error_code = 1
 
-    logging.error("Missing or invalid command. \
-                  Supported commands: {prods, upload, download, sign, verify}")
-    return 1
+    return error_code
 
 
 if __name__ == "__main__":
