@@ -30,40 +30,35 @@ import pytz
 import tzlocal
 from paramiko.message import Message
 
-INTERLYNK_API_URL = 'https://api.interlynk.io/lynkapi'
+INTERLYNK_API_URL = 'http://localhost:3000/lynkapi'
 INTERLYNK_API_TIMEOUT = 100
 
-QUERY_PROJECTS_LIST = """
-query GetProjects($first: Int, $last: Int, $after: String, $before: String) {
-  projects(first: $first, last: $last, after: $after, before: $before) {
-    pageInfo {
-      endCursor
-      hasNextPage
-      startCursor
-      hasPreviousPage
-      __typename
-    }
-    nodes {
-      id
-      name
-      description
-      updatedAt
-      organizationId
-      sboms {
-        id
-        format
-        updatedAt
-        primaryComponent {
-          id
-          name
-          version
-          __typename
+QUERY_PRODUCTS_LIST = """
+query GetProducts($enabled: Boolean) {
+  organization {
+    products: projectGroups(
+      enabled: $enabled
+    ) {
+      totalCount
+      nodes {
+        prodId: id
+        prodName: name
+        prodUpdateAt: updatedAt
+        prodEnabled: enabled
+        environments: projects {
+          envId: id
+          envName: name
+          versions: sboms {
+            id
+            updatedAt
+            primaryComponent {
+              name
+              version
+            }
+          }
         }
-        __typename
       }
-      __typename
     }
-    __typename
   }
 }
 """
@@ -100,11 +95,10 @@ query downloadSbom($projectId: Uuid!, $sbomId: Uuid!, $spec: String,
 """
 
 QUERY_PROJECT_PARAMS = {
-    'operationName': 'GetProjects',
+    'operationName': 'GetProducts',
     'variables': {},
-    'query': QUERY_PROJECTS_LIST
+    'query': QUERY_PRODUCTS_LIST
 }
-
 
 def user_time(utc_time):
     """
@@ -134,9 +128,9 @@ def product_by_name(data_json, prod_name):
     Returns:
       dict or None: The project node or None if not found.
     """
-    nodes = data_json['data']['projects']['nodes']
+    nodes = data_json['data']['organization']['products']['nodes']
     return next((node for node in nodes
-                 if node["name"] == prod_name), None)
+                 if node['prodName'] == prod_name), None)
 
 
 def product_by_id(data_json, prod_id):
@@ -152,8 +146,8 @@ def product_by_id(data_json, prod_id):
       dict or None: The project node that matches the given ID, or None
         if no match was found.
     """
-    nodes = data_json["data"]["projects"]["nodes"]
-    return next((node for node in nodes if node["id"] == prod_id), None)
+    nodes = data_json["data"]["organization"]["products"]["nodes"]
+    return next((node for node in nodes if node["prodId"] == prod_id), None)
 
 
 def product_version_by_name(data_json, prod_id, version):
@@ -203,6 +197,17 @@ def product_version_by_id(data_json, product_id, version_id):
         prod['sboms']
     ) if sbom.get('primaryComponent') and
        sbom['primaryComponent']['version'] == version_id),
+       None)
+
+
+def product_env_by_name(data_json, prod_id, env):
+    prod = product_by_id(data_json, prod_id)
+    if prod is None:
+        return None
+
+    return next((env_node for index, env_node in enumerate(
+        prod['environments']
+    ) if env_node.get('envName') == env),
        None)
 
 
@@ -452,17 +457,18 @@ def print_products(token):
       0 for success 1 otherwise
     """
     products_json = products(token)
+    if (products_json.get('errors')):
+        logging.error("Query error: GetProducts")
+        return 1
+    
     if not products_json:
         logging.error("No products found")
         return 1
-
-    prod_nodes = products_json['data']['projects']['nodes']
+    prod_nodes = products_json['data']['organization']['projectGroups']['nodes']
 
     # Calculate dynamic column widths
     name_width = max(len("NAME"), max(len(prod['name'])
-                                      for prod in prod_nodes))
-    versions_width = max(len("VERSIONS"), max(len(str(len(prod['sboms'])))
-                                              for prod in prod_nodes))
+                                       for prod in prod_nodes))
     updated_at_width = max(len("UPDATED AT"),
                            max(len(user_time(prod['updatedAt']))
                                for prod in prod_nodes))
@@ -470,30 +476,28 @@ def print_products(token):
 
     header = (
         f"{ 'NAME':<{name_width}} | "
-        f"{ 'VERSIONS':<{versions_width}} | "
+        f"{ 'ID':<{id_width}} | "
         f"{ 'UPDATED AT':<{updated_at_width}} | "
-        f"{ 'ID':<{id_width}}"
     )
     print(header)
 
     # Add a horizontal line after the header
     # 8 is the total length of separators and spaces
-    width = sum([name_width, versions_width, updated_at_width, id_width]) + 8
+    width = sum([name_width, updated_at_width, id_width]) + 8
     line = "-" * width
     print(line)
 
     for prod in prod_nodes:
         row = (
             f"{prod['name']:<{name_width}} | "
-            f"{len(prod['sboms']):<{versions_width}} | "
+            f"{prod['id']:<{id_width}} | "
             f"{user_time(prod['updatedAt']):<{updated_at_width}} | "
-            f"{prod['id']:<{id_width}}"
         )
         print(row)
     return 0
 
 
-def print_versions(token, prod_id):
+def print_versions(token, prod_id, env_id):
     """
     Lists the available versions for a given product.
 
@@ -514,20 +518,25 @@ def print_versions(token, prod_id):
         print('No matching product')
         return 0
 
+    env_node = next((env_node for index, env_node in enumerate(
+        product_node['environments']
+    ) if env_node['envId'] == env_id),
+       None)
+    
     # Calculate dynamic column widths
     id_width = max(len("ID"), max(len(sbom['id'])
-                                  for sbom in product_node['sboms']))
+                                  for sbom in env_node['versions']))
     version_width = max(len("VERSION"),
                         max(len(s.get('primaryComponent', {})
                                 .get('version', ''))
-                        for s in product_node['sboms']))
+                        for s in env_node['versions']))
     primary_component_width = max(len("PRIMARY COMPONENT"),
                                   max(len(sbom.get('primaryComponent', {})
                                           .get('name', ''))
-                                      for sbom in product_node['sboms']))
+                                      for sbom in env_node['versions']))
     updated_at_width = max(len("UPDATED AT"),
                            max(len(user_time(sbom['updatedAt']))
-                               for sbom in product_node['sboms']))
+                               for sbom in env_node['versions']))
 
     # Format the header with dynamic column widths
     header = (
@@ -547,7 +556,7 @@ def print_versions(token, prod_id):
     print(line)
 
     # Format each row with dynamic column widths and a bar between elements
-    for sbom in product_node['sboms']:
+    for sbom in env_node['versions']:
         if sbom.get('primaryComponent') is None:
             continue
         version = sbom.get('primaryComponent', {}).get('version', '')
@@ -584,29 +593,33 @@ def setup_args():
 
     vers_group.add_argument("--prod", help="Product name")
     vers_group.add_argument("--prodId", help="Product ID")
+
+    vers_parser.add_argument("--env", help="Environment", required=False)
     vers_parser.add_argument("--token",
                              required=False,
                              help="Security token")
 
     upload_parser = subparsers.add_parser("upload", help="Upload SBOM")
-    arg_group = upload_parser.add_mutually_exclusive_group(required=True)
-    arg_group.add_argument("--prod", help="Product name")
-    arg_group.add_argument("--prodId", help="Product ID")
+    upload_group = upload_parser.add_mutually_exclusive_group(required=True)
+    upload_group.add_argument("--prod", help="Product name")
+    upload_group.add_argument("--prodId", help="Product ID")
 
+    upload_parser.add_argument("--env", help="Environment", required=False)
     upload_parser.add_argument("--sbom", required=True, help="SBOM path")
     upload_parser.add_argument("--token",
                                required=False,
                                help="Security token")
 
     download_parser = subparsers.add_parser("download", help="Download SBOM")
-    arg_group = download_parser.add_mutually_exclusive_group(required=True)
-    arg_group.add_argument("--prod", help="Product name")
-    arg_group.add_argument("--prodId", help="Product ID")
+    download_group = download_parser.add_mutually_exclusive_group(required=True)
+    download_group.add_argument("--prod", help="Product name")
+    download_group.add_argument("--prodId", help="Product ID")
 
-    arg_group = download_parser.add_mutually_exclusive_group(required=True)
-    arg_group.add_argument("--ver", help="Version")
-    arg_group.add_argument("--verId", help="Version ID")
+    download_group = download_parser.add_mutually_exclusive_group(required=True)
+    download_group.add_argument("--ver", help="Version")
+    download_group.add_argument("--verId", help="Version ID")
 
+    download_parser.add_argument("--env", help="Environment", required=False)
     download_parser.add_argument("--token",
                                  required=False,
                                  help="Security token")
@@ -685,10 +698,34 @@ def arg_prod_id(args):
         token = arg_token(args)
         node = product_by_name(products(token), args.prod)
         if node is not None:
-            return node.get('id')
+            return node.get('prodId')
 
     return None
 
+def arg_env_id(args):
+    """
+    Get the version ID from the CLI or environment variables.
+
+    Args:
+      args (argparse.Namespace): The parsed command line arguments.
+
+    Returns:
+      str: The version ID.
+    """
+    if hasattr(args, 'envId') and args.envId is not None:
+        return args.envId
+
+    env = 'default'
+    if hasattr(args, 'env') and args.env is not None:
+        env = args.env
+
+    token = arg_token(args)
+    prod_id = arg_prod_id(args)
+    prod_node = product_env_by_name(products(token), prod_id, env)
+    if prod_node is not None:
+        return prod_node.get('envId')
+
+    return None
 
 def arg_ver_id(args):
     """
@@ -713,6 +750,20 @@ def arg_ver_id(args):
     return None
 
 
+def arg_env(args):
+    if getattr(args, 'env', None) is not None:
+        return args.env
+
+    if hasattr(args, 'env') and args.env is not None:
+        token = arg_token(args)
+        prod_id = arg_prod_id(args)
+        print('KKKKKK', products(token))
+        prod_node = product_env_by_name(products(token), prod_id, args.ver)
+        if prod_node is not None:
+            return prod_node.get('id')
+
+    return None
+
 def main() -> int:
     """
     Run Interlynk Commands
@@ -722,19 +773,22 @@ def main() -> int:
     """
     args = setup_args()
     log_level(args)
+    error_code = 1
 
-    error_code = 0
     token = arg_token(args)
-    prod_id = arg_prod_id(args)
-    ver_id = arg_ver_id(args)
-
-    logging.debug('Token (Partial): %s ProductId: %s, VersionId: %s',
-                  token[-5:], prod_id, ver_id)
+    if token is None:
+      print("Missing security token")
+      return error_code
 
     if args.subcommand == "prods":
         error_code = print_products(token)
-    elif args.subcommand == "vers":
-        error_code = print_versions(token, prod_id)
+    elif args.subcommand == "vers":            
+        prod_id = arg_prod_id(args)
+        ver_id = arg_ver_id(args)
+        env_id = arg_env_id(args)
+        logging.debug('Token (Partial): %s ProductId: %s, VersionId: %s',
+                      token[-5:], prod_id, ver_id)
+        error_code = print_versions(token, prod_id, env_id)
     elif args.subcommand == "upload":
         error_code = upload_sbom(token, prod_id, args.sbom)
     elif args.subcommand == "download":
