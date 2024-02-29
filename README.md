@@ -129,3 +129,10 @@ Uploaded successfully
 
 ##  Increasing the verbosity of output
 Use `--verbose` or `-v` with any command to see debug output.
+
+
+##  Debugging 
+To point to a different API endpoint than production
+```bash
+export INTERLYNK_API_URL=http://localhost:3000/lynkapi
+```
