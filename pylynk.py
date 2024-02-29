@@ -202,10 +202,8 @@ def main() -> int:
     args = setup_args()
     setup_log_level(args)
     lynk_ctx = setup_lynk_context(args)
-
-    if lynk_ctx.token is None:
-      print("Missing security token")
-      exit(1)
+    if not lynk_ctx.validate():
+        exit(1)
 
     if args.subcommand == "prods":
         print_products(lynk_ctx)
