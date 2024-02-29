@@ -188,7 +188,8 @@ def setup_log_level(args):
 
 def setup_lynk_context(args):
     return LynkContext(
-        getattr(args, 'token', None) or os.environ.get("INTERLYNK_SECURITY_TOKEN"),
+        os.environ.get('INTERLYNK_API_URL'),
+        getattr(args, 'token', None) or os.environ.get('INTERLYNK_SECURITY_TOKEN'),
         getattr(args, 'prodId', None),
         getattr(args, 'prod', None),
         getattr(args, 'envId', None),

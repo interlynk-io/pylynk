@@ -4,7 +4,8 @@ import logging
 import os
 import base64
 
-INTERLYNK_API_URL = 'http://localhost:3000/lynkapi'
+INTERLYNK_API_URL = 'https://api.interlynk.io/lynkapi'
+
 INTERLYNK_API_TIMEOUT = 100
 
 QUERY_PRODUCTS_LIST = """
@@ -72,7 +73,8 @@ query downloadSbom($envId: Uuid!, $sbomId: Uuid!, $includeVulns: Boolean) {
 """
 
 class LynkContext:
-    def __init__(self, token, prod_id, prod, env_id, env, ver_id, ver):
+    def __init__(self, api_url, token, prod_id, prod, env_id, env, ver_id, ver):
+        self.api_url = api_url or INTERLYNK_API_URL
         self.token = token
         self.prod_id = prod_id
         self.prod = prod
@@ -81,6 +83,8 @@ class LynkContext:
         self.ver_id = ver_id
         self.ver = ver
         self.data = self._fetch_context()
+        if not self.data:
+            return
 
         if prod:
             self._set_prod_id()
@@ -94,7 +98,7 @@ class LynkContext:
     def _fetch_context(self):
         headers = {"Authorization": "Bearer " + self.token}
         try:
-            response = requests.post(INTERLYNK_API_URL,
+            response = requests.post(self.api_url,
                                      headers=headers,
                                      data=QUERY_PROJECT_PARAMS,
                                      timeout=INTERLYNK_API_TIMEOUT)
@@ -184,7 +188,7 @@ class LynkContext:
             "variables": variables,
         }
 
-        response = requests.post(INTERLYNK_API_URL,
+        response = requests.post(self.api_url,
                                 headers={"Authorization": "Bearer " + self.token},
                                 json=request_data,
                                 timeout=INTERLYNK_API_TIMEOUT)
@@ -246,7 +250,7 @@ class LynkContext:
         try:
             with open(sbom_file, 'rb') as sbom:
                 files_map = {'0': sbom}
-                response = requests.post(INTERLYNK_API_URL,
+                response = requests.post(self.api_url,
                                         headers=headers,
                                         data=form_data,
                                         files=files_map,
