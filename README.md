@@ -24,17 +24,14 @@ python3 pylynk.py prods --token lynk_test_GDGEB2j6jnhkzLSAQk9U3wiiQLrbNT11Y8J4
 
 # List Products
 ```bash
-python3 pylynk.py
+python3 pylynk.py prods
 ```
 Output
 ```
-NAME             | ID                                   | VERSIONS | UPDATED AT              |
----------------------------------------------------------------------------------------------
-PSA3000 Firmware | f995875c-43f1-4f3b-b8dc-20cb166653e6 | 2        | 2024-02-28 01:43:57 PST |
-ProductX         | 30911a38-98cd-4734-b794-2085671aa1ca | 1        | 2024-02-18 17:01:34 PST |
-sbom-exec        | 0bcdcc92-c3db-47fa-a554-236ea1974817 | 3        | 2024-02-18 17:01:22 PST |
-sbom-zen         | 577eee34-98a9-4c99-bab0-bf7592e05c5f | 1        | 2024-02-18 17:01:19 PST |
-Test Project 3   | 137cdf61-a99c-42ca-b6c6-449bf5aa24cd | 0        | 2024-02-14 09:09:33 PST |
+NAME   | ID                                   | VERSIONS | UPDATED AT              |
+-----------------------------------------------------------------------------------|
+sbomqs | 478ba2d2-ec5c-4eec-afb7-85a72fe17bd3 | 1        | 2024-02-29 01:07:59 PST |
+sbomex | e865710e-b262-4f44-9078-970052794a60 | 1        | 2024-02-29 01:05:24 PST |
 ```
 
 # List Environments
@@ -43,13 +40,13 @@ TBD
 # List Versions 
 ## List Versions by Product ID (default Environment)
 ```bash
-python3 pylynk.py vers --prodId 'f995875c-43f1-4f3b-b8dc-20cb166653e6'
+python3 pylynk.py vers --prodId 'e865710e-b262-4f44-9078-970052794a60'
 ```
 Output
 ```bash
-ID                                   | VERSION          | PRIMARY COMPONENT | UPDATED AT              |
-------------------------------------------------------------------------------------------------------
-5ad77318-56e9-4bfa-9147-d28d0c76dc1c | 9.1.18.2-24467.1 | ICS               | 2024-02-20 02:58:35 PST
+ID                                   | VERSION                                                                 | PRIMARY COMPONENT     | UPDATED AT              |
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+fbcc24ad-5911-4229-8943-acf863c07bb4 | sha256:5ed7e95ae79fe3fe6c4b8660f6f9e31154e64eca76ae42963a679fbb198c3951 | centos:centos7.9.2009 | 2024-02-29 01:05:24 PST |
 ```
 ## List Versions by Product Name (default Environment)
 ```bash
@@ -65,13 +62,13 @@ e0b1fb60-03de-4202-b316-51422351b96b | 1.3     | agdfda                  | 2024-
 ```
 ## List Versions for specific Environment Name
 ```bash
-python3 pylynk.py vers --prod 'PSA3000 Firmware' --env 'development'
+python3 pylynk.py vers --prod 'sbomqs' --env 'production'
 ```
 Output
 ```bash
-ID                                   | VERSION | PRIMARY COMPONENT | UPDATED AT              |
----------------------------------------------------------------------------------------------|
-5c374ad9-2e74-4043-87d8-652982fe18b8 |         | .                 | 2024-02-28 01:43:57 PST |
+ID                                   | VERSION                                                                 | PRIMARY COMPONENT     | UPDATED AT              |
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+6067a2f0-76b1-4b51-97cf-cc01175d66c4 | sha256:5ed7e95ae79fe3fe6c4b8660f6f9e31154e64eca76ae42963a679fbb198c3951 | centos:centos7.9.2009 | 2024-02-29 00:59:11 PST |
 ```
 ## List Versions for specific Environment ID
 TBD
@@ -80,25 +77,40 @@ TBD
 ## Download SBOM for specific Version by ID
 Run the following command to upload an SBOM:
 ```bash
-python3 pylynk.py download --prod 'sbom-exec' --verId '5a46ab07-174f-4074-b4af-f8f83a17b822'
+python3 pylynk.py download --prod 'sbomex' --verId 'fbcc24ad-5911-4229-8943-acf863c07bb4'
+```
+Output
+```bash
+{SBOM Data}
 ```
 ## Download SBOM for specific Version by Name
 Run the following command to upload an SBOM:
 ```bash
-python3 pylynk.py -v download --prod 'sbom-exec' --env 'production' --ver '1.0.1'
+python3 pylynk.py download --prod 'sbomex' --env 'default' --vers 'sha256:5ed7e95ae79fe3fe6c4b8660f6f9e31154e64eca76ae42963a679fbb198c3951'
+```
+Output
+```bash
+{SBOM Data}
 ```
 # Upload SBOM
-## Upload SBOM
-Run the following command to upload an SBOM:
+## Upload SBOM to the default environment
+Upload SBOM file sbomqs.cdx.json to the product named **sbomqs**
 ```bash
-python3 pylynk.py upload --prod 'sbom-exec' --sbom lynk-api.cdx.json
+python3 pylynk.py upload --prod 'sbomqs' --sbom sbomqs.cdx.json
+```
+Output
+```
+Uploaded successfully
 ```
 ## Upload SBOM to specific Environment
-Run the following command to upload an SBOM:
+Upload SBOM file sbomqs.cdx.json to the product named **sbomqs** under environment **production**
 ```bash
-python3 pylynk.py upload --prod 'sbom-exec' --env 'production' --sbom lynk-dash-app.cdx.json
+python3 pylynk.py upload --prod 'sbomqs' --env 'production' --sbom sbomqs.cdx.json
 ```
-
+Output
+```
+Uploaded successfully
+```
 
 ##  Increasing Verbosity of out
 Use `--verbose` or `-v` with any command to see debug output.
