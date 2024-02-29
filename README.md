@@ -93,7 +93,7 @@ Run the following command to upload an SBOM:
 ```bash
 python3 pylynk.py upload --prod 'sbom-exec' --sbom lynk-api.cdx.json
 ```
-## Download SBOM to specific Environment
+## Upload SBOM to specific Environment
 Run the following command to upload an SBOM:
 ```bash
 python3 pylynk.py upload --prod 'sbom-exec' --env 'production' --sbom lynk-dash-app.cdx.json
