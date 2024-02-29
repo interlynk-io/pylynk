@@ -164,7 +164,7 @@ def products(token):
     return None
 
 
-def upload_sbom(token, product_id, sbom_file):
+def upload_sbom(token, product_id, env_id, sbom_file):
     if os.path.isfile(sbom_file) is False:
         logging.error('SBOM File not found: %s', sbom_file)
         return 1
@@ -177,7 +177,7 @@ def upload_sbom(token, product_id, sbom_file):
 
     operations = json.dumps({
       "query": QUERY_SBOM_UPLOAD,
-      "variables": {"doc": None, "projectId": product_id}
+      "variables": {"doc": None, "projectId": env_id}
     })
     map_data = json.dumps({"0": ["variables.doc"]})
 
@@ -296,8 +296,8 @@ def print_products(token):
     print(header)
 
     # Add a horizontal line after the header
-    # 8 is the total length of separators and spaces
-    width = sum([name_width, updated_at_width, id_width]) + 8
+    # 10 is the total length of separators and spaces
+    width = sum([name_width, version_width, updated_at_width, id_width]) + 10
     line = "-" * width
     print(line)
 
@@ -359,7 +359,7 @@ def print_versions(token, prod_id, env_id):
         f"{'ID':<{id_width}} | "
         f"{'VERSION':<{version_width}} | "
         f"{'PRIMARY COMPONENT':<{primary_component_width}} | "
-        f"{'UPDATED AT':<{updated_at_width}}"
+        f"{'UPDATED AT':<{updated_at_width}} |"
     )
     print(header)
 
@@ -367,8 +367,8 @@ def print_versions(token, prod_id, env_id):
     # 12 is the total length of separators and spaces
     width = sum([id_width, version_width,
                  primary_component_width,
-                 updated_at_width]) + 12
-    line = "-" * width
+                 updated_at_width]) + 10
+    line = "-" * width + "|"
     print(line)
 
     # Format each row with dynamic column widths and a bar between elements
@@ -381,7 +381,7 @@ def print_versions(token, prod_id, env_id):
             f"{sbom['id']:<{id_width}} | "
             f"{version:<{version_width}} | "
             f"{primary_component:<{primary_component_width}} | "
-            f"{user_time(sbom['updatedAt']):<{updated_at_width}}"
+            f"{user_time(sbom['updatedAt']):<{updated_at_width}} |"
         )
         print(row)
 
@@ -531,7 +531,15 @@ def main() -> int:
                         token[-5:], prod_id, env_id)
           error_code = print_versions(token, prod_id, env_id)
     elif args.subcommand == "upload":
-        error_code = upload_sbom(token, prod_id, args.sbom)
+        prod_id = arg_prod_id(args)
+        env_id = arg_env_id(args)
+        if not prod_id or not env_id:
+          print("Failed to find product or environment")
+          error_code = 1
+        else:
+          logging.debug('Token (Partial): %s ProductId: %s, EnvId: %s',
+                        token[-5:], prod_id, env_id)
+        error_code = upload_sbom(token, prod_id, env_id, args.sbom)
     elif args.subcommand == "download":
         env_id = arg_env_id(args)
         ver_id = arg_ver_id(args, env_id)
