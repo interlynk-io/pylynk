@@ -99,7 +99,7 @@ class LynkContext:
             print('Product not found')
             return False
 
-        if not self.resolve_env(): # There is a default env
+        if self.prod and not self.resolve_env(): # There must be a default env
             self.env = self.env_id = None
             print('Environment not found')
             return False
