@@ -72,6 +72,7 @@ query downloadSbom($envId: Uuid!, $sbomId: Uuid!, $includeVulns: Boolean) {
 }
 """
 
+
 class LynkContext:
     def __init__(self, api_url, token, prod_id, prod, env_id, env, ver_id, ver):
         self.api_url = api_url or INTERLYNK_API_URL
@@ -91,7 +92,8 @@ class LynkContext:
         self.data = self._fetch_context()
         if not self.data or self.data.get('errors'):
             print("Error getting Interlynk data")
-            print("Possible problems: invalid security token, stale pylynk or invalid INTERLYNK_API_URL")
+            print(
+                "Possible problems: invalid security token, stale pylynk or invalid INTERLYNK_API_URL")
             return False
 
         if (self.prod or self.prod_id) and not self.resolve_prod():
@@ -99,11 +101,10 @@ class LynkContext:
             print('Product not found')
             return False
 
-        if self.prod and not self.resolve_env(): # There must be a default env
+        if self.prod and not self.resolve_env():  # There must be a default env
             self.env = self.env_id = None
             print('Environment not found')
             return False
-
 
         if (self.ver or self.ver_id) and not self.resolve_ver():
             self.ver = self.ver_id = None
@@ -132,11 +133,15 @@ class LynkContext:
 
     def resolve_prod(self):
         if not self.prod_id:
-            nodes = self.data.get('data', {}).get('organization', {}).get('productNodes', {}).get('products', [])
-            self.prod_id = next((node['id'] for node in nodes if node['name'] == self.prod), None)
+            nodes = self.data.get('data', {}).get('organization', {}).get(
+                'productNodes', {}).get('products', [])
+            self.prod_id = next(
+                (node['id'] for node in nodes if node['name'] == self.prod), None)
         if not self.prod:
-            nodes = self.data.get('data', {}).get('organization', {}).get('productNodes', {}).get('products', [])
-            self.prod = next((node['name'] for node in nodes if node['id'] == self.prod_id), None)
+            nodes = self.data.get('data', {}).get('organization', {}).get(
+                'productNodes', {}).get('products', [])
+            self.prod = next(
+                (node['name'] for node in nodes if node['id'] == self.prod_id), None)
         return self.prod and self.prod_id
 
     def resolve_env(self):
@@ -150,7 +155,7 @@ class LynkContext:
             for product in self.data.get('data', {}).get('organization', {}).get('productNodes', {}).get('products', []):
                 if product['id'] == self.prod_id:
                     self.env = next((env_node['id'] for env_node in product.get('environments', [])
-                                        if env_node.get('id') == self.env_id), None)
+                                     if env_node.get('id') == self.env_id), None)
         return self.env and self.env_id
 
     def resolve_ver(self):
@@ -160,17 +165,17 @@ class LynkContext:
                 if product['id'] == self.prod_id:
                     for env in product['environments']:
                         if env['id'] == self.env_id:
-                                for ver in env['versions']:
-                                    if ver['primaryComponent']['version'] == self.ver:
-                                        self.ver_id = ver['id']
+                            for ver in env['versions']:
+                                if ver['primaryComponent']['version'] == self.ver:
+                                    self.ver_id = ver['id']
         if not self.ver:
             for product in self.data.get('data', {}).get('organization', {}).get('productNodes', {}).get('products', []):
                 if product['id'] == self.prod_id:
                     for env in product['environments']:
                         if env['id'] == self.env_id:
-                                for ver in env['versions']:
-                                    if ver['id'] == self.ver_id:
-                                        self.ver = ver['primaryComponent']['version']
+                            for ver in env['versions']:
+                                if ver['id'] == self.ver_id:
+                                    self.ver = ver['primaryComponent']['version']
         return self.ver and self.ver_id
 
     def __repr__(self):
@@ -189,7 +194,8 @@ class LynkContext:
         prod_nodes = self.data['data']['organization']['productNodes']['products']
         prod_list = []
         for prod in prod_nodes:
-            versions = sum(len(env['versions']) for env in prod['environments'])
+            versions = sum(len(env['versions'])
+                           for env in prod['environments'])
             prod_list.append({
                 'name': prod['name'],
                 'updatedAt': prod['updatedAt'],
@@ -206,7 +212,7 @@ class LynkContext:
 
     def download(self):
         logging.debug("Downloading SBOM for environment ID %s, sbom ID %s",
-                    self.env_id, self.ver_id)
+                      self.env_id, self.ver_id)
 
         variables = {
             "envId": self.env_id,
@@ -220,9 +226,10 @@ class LynkContext:
         }
 
         response = requests.post(self.api_url,
-                                headers={"Authorization": "Bearer " + self.token},
-                                json=request_data,
-                                timeout=INTERLYNK_API_TIMEOUT)
+                                 headers={
+                                     "Authorization": "Bearer " + self.token},
+                                 json=request_data,
+                                 timeout=INTERLYNK_API_TIMEOUT)
 
         if response.status_code == 200:
             try:
@@ -246,7 +253,7 @@ class LynkContext:
                 logging.error("Failed to parse JSON response.")
         else:
             logging.error("Failed to send GraphQL request. Status code: %s",
-                        response.status_code)
+                          response.status_code)
 
     def upload(self, sbom_file):
         if os.path.isfile(sbom_file) is False:
@@ -264,31 +271,32 @@ class LynkContext:
         logging.debug("Uploading SBOM to product ID %s", self.prod_id)
 
         headers = {
-        "Authorization": "Bearer " + self.token
+            "Authorization": "Bearer " + self.token
         }
 
         operations = json.dumps({
-        "query": QUERY_SBOM_UPLOAD,
-        "variables": {"doc": None, "projectId": self.env_id}
+            "query": QUERY_SBOM_UPLOAD,
+            "variables": {"doc": None, "projectId": self.env_id}
         })
         map_data = json.dumps({"0": ["variables.doc"]})
 
         form_data = {
-        "operations": operations,
-        "map": map_data
+            "operations": operations,
+            "map": map_data
         }
 
         try:
             with open(sbom_file, 'rb') as sbom:
                 files_map = {'0': sbom}
                 response = requests.post(self.api_url,
-                                        headers=headers,
-                                        data=form_data,
-                                        files=files_map,
-                                        timeout=INTERLYNK_API_TIMEOUT)
+                                         headers=headers,
+                                         data=form_data,
+                                         files=files_map,
+                                         timeout=INTERLYNK_API_TIMEOUT)
                 if response.status_code == 200:
                     resp_json = response.json()
-                    errors = resp_json.get('errors')
+                    errors = resp_json.get('data', {}).get(
+                        'sbomUpload', {}).get('errors')
                     if errors is not None and errors != '[]':
                         print(f"Error uploading sbom: {errors}")
                         return 1
@@ -301,4 +309,3 @@ class LynkContext:
         except FileNotFoundError as ex:
             logging.error("FileNotFoundError: %s", ex)
         return 1
-
