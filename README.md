@@ -1,5 +1,20 @@
-# PyLynk
-Interlynk Python Command line utility
+<!--
+ Copyright 2024 Interlynk.io
+ 
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+ 
+     http://www.apache.org/licenses/LICENSE-2.0
+ 
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+# `pylynk`: Interlynk Python Command line utility
 
 Getting started with Interlynk CLI
 
@@ -136,3 +151,25 @@ To point to a different API endpoint than production
 ```bash
 export INTERLYNK_API_URL=http://localhost:3000/lynkapi
 ```
+
+# Other SBOM Open Source tools
+- [SBOM Assembler](https://github.com/interlynk-io/sbomasm) - A tool to compose a single SBOM by combining other (part) SBOMs
+- [SBOM Quality Score](https://github.com/interlynk-io/sbomqs) - A tool for evaluating the quality and completeness of SBOMs
+- [SBOM Search Tool](https://github.com/interlynk-io/sbomagr) - A tool to grep style semantic search in SBOMs
+- [SBOM Explorer](https://github.com/interlynk-io/sbomex) - A tool for discovering and downloading SBOM from a public repository
+
+# Contact 
+We appreciate all feedback. The best ways to get in touch with us:
+- :phone: [Live Chat](https://www.interlynk.io/#hs-chat-open)
+- 📫 [Email Us](mailto:hello@interlynk.io)
+- 🐛 [Report a bug or enhancement](https://github.com/interlynk-io/sbomex/issues) 
+- :x: [Follow us on X](https://twitter.com/InterlynkIo)
+
+# Stargazers
+
+If you like this project, please support us by starring it. 
+
+[![Stargazers](https://starchart.cc/interlynk-io/pylynk.svg)](https://starchart.cc/interlynk-io/pylynk)
+
+
+
