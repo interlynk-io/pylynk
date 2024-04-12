@@ -297,7 +297,7 @@ class LynkContext:
                     resp_json = response.json()
                     errors = resp_json.get('data', {}).get(
                         'sbomUpload', {}).get('errors')
-                    if errors is not None and errors != '[]':
+                    if errors:
                         print(f"Error uploading sbom: {errors}")
                         return 1
                     print('Uploaded successfully')
