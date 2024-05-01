@@ -125,7 +125,7 @@ def download_sbom(lynk_ctx):
         print('Failed to fetch SBOM')
         return 1
 
-    print(sbom)
+    print(sbom.encode("utf-8"))
     return 0
 
 def upload_sbom(lynk_ctx, sbom_file):
