@@ -13,16 +13,26 @@
 # limitations under the License.
 
 import os
+import sys
+import json
 import argparse
 import logging
 import datetime
 import pytz
 import tzlocal
-import sys
 from lynkctx import LynkContext
 
 
 def user_time(utc_time):
+    """
+    Convert UTC time to local time and format it as a string.
+
+    Args:
+        utc_time (str): The UTC time in ISO format.
+
+    Returns:
+        str: The local time formatted as a string.
+    """
     timestamp = datetime.datetime.fromisoformat(utc_time[:-1])
     local_timezone = tzlocal.get_localzone()
     local_time = timestamp.replace(tzinfo=pytz.UTC).astimezone(local_timezone)
@@ -30,6 +40,12 @@ def user_time(utc_time):
 
 
 def print_products(lynk_ctx):
+    """
+    Print the products of the Lynk context.
+
+    Args:
+        lynk_ctx (LynkContext): The Lynk context object.
+    """
     products = lynk_ctx.prods()
 
     # Calculate dynamic column widths
@@ -67,6 +83,12 @@ def print_products(lynk_ctx):
 
 
 def print_versions(lynk_ctx):
+    """
+    Print the versions of the Lynk context.
+
+    Args:
+        lynk_ctx (LynkContext): The Lynk context object.
+    """
     versions = lynk_ctx.versions()
     if not versions:
         print('No versions found')
@@ -122,20 +144,49 @@ def print_versions(lynk_ctx):
 
 
 def download_sbom(lynk_ctx):
+    """
+    Download SBOM from the lynk_ctx and save it to a file or print it to stdout.
+
+    Args:
+        lynk_ctx: The lynk context object.
+
+    Returns:
+        int: 0 if successful, 1 if failed to fetch SBOM.
+    """
     sbom = lynk_ctx.download()
     if sbom is None:
         print('Failed to fetch SBOM')
         return 1
 
-    sys.stdout.buffer.write(sbom.encode("utf-8", errors='ignore'))
+    sbom_data = json.loads(sbom.encode('utf-8'))
+
+    if lynk_ctx.output_file:
+        with open(lynk_ctx.output_file, 'w', encoding='utf-8') as f:
+            json.dump(sbom_data, f, indent=4, ensure_ascii=False)
+    else:
+        json.dump(sbom_data, sys.stdout, indent=4, ensure_ascii=False)
+
     return 0
 
 
 def upload_sbom(lynk_ctx, sbom_file):
+    """
+    Upload SBOM to the lynk_ctx.
+
+    Args:
+        lynk_ctx: The lynk context object.
+        sbom_file: The path to the SBOM file.
+
+    Returns:
+        The result of the upload operation.
+    """
     return lynk_ctx.upload(sbom_file)
 
 
 def setup_args():
+    """
+    Set up command line arguments for the script.
+    """
     parser = argparse.ArgumentParser(description='Interlynk command line tool')
     parser.add_argument('--verbose', '-v', action='count', default=0)
 
@@ -183,17 +234,38 @@ def setup_args():
                                  required=False,
                                  help="Security token")
 
+    download_parser.add_argument(
+        "--output", help="Output file", required=False)
+
     args = parser.parse_args()
     return args
 
 
 def setup_log_level(args):
+    """
+    Set up the log level based on the command line arguments.
+
+    Args:
+        args: The command line arguments.
+
+    Returns:
+        None.
+    """
     if args.verbose == 0:
         logging.basicConfig(level=logging.ERROR)
     logging.basicConfig(level=logging.DEBUG)
 
 
 def setup_lynk_context(args):
+    """
+    Set up the LynkContext object based on the command line arguments.
+
+    Args:
+        args: The command line arguments.
+
+    Returns:
+        LynkContext: The LynkContext object.
+    """
     return LynkContext(
         os.environ.get('INTERLYNK_API_URL'),
         getattr(args, 'token', None) or os.environ.get(
@@ -203,11 +275,18 @@ def setup_lynk_context(args):
         getattr(args, 'envId', None),
         getattr(args, 'env', None),
         getattr(args, 'verId', None),
-        getattr(args, 'ver', None)
+        getattr(args, 'ver', None),
+        getattr(args, 'output', None)
     )
 
 
 def main() -> int:
+    """
+    Main function that serves as the entry point of the program.
+
+    Returns:
+        int: The exit code of the program.
+    """
     args = setup_args()
     setup_log_level(args)
     lynk_ctx = setup_lynk_context(args)
