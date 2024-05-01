@@ -18,6 +18,7 @@ import logging
 import datetime
 import pytz
 import tzlocal
+import sys
 from lynkctx import LynkContext
 
 
@@ -33,7 +34,7 @@ def print_products(lynk_ctx):
 
     # Calculate dynamic column widths
     name_width = max(len("NAME"), max(len(prod['name'])
-                                       for prod in products))
+                                      for prod in products))
     updated_at_width = max(len("UPDATED AT"),
                            max(len(user_time(prod['updatedAt']))
                                for prod in products))
@@ -41,10 +42,10 @@ def print_products(lynk_ctx):
     version_width = len("VERSIONS")
 
     header = (
-        f"{ 'NAME':<{name_width}} | "
-        f"{ 'ID':<{id_width}} | "
-        f"{ 'VERSIONS':<{version_width}} | "
-        f"{ 'UPDATED AT':<{updated_at_width}} | "
+        f"{'NAME':<{name_width}} | "
+        f"{'ID':<{id_width}} | "
+        f"{'VERSIONS':<{version_width}} | "
+        f"{'UPDATED AT':<{updated_at_width}} | "
     )
     print(header)
 
@@ -119,18 +120,21 @@ def print_versions(lynk_ctx):
 
     return 0
 
+
 def download_sbom(lynk_ctx):
     sbom = lynk_ctx.download()
     if sbom is None:
         print('Failed to fetch SBOM')
         return 1
 
-    print(sbom.encode("utf-8"))
+    sys.stdout.buffer.write(sbom.encode("utf-8", errors='ignore'))
     return 0
+
 
 def upload_sbom(lynk_ctx, sbom_file):
     return lynk_ctx.upload(sbom_file)
-    
+
+
 def setup_args():
     parser = argparse.ArgumentParser(description='Interlynk command line tool')
     parser.add_argument('--verbose', '-v', action='count', default=0)
@@ -164,11 +168,13 @@ def setup_args():
                                help="Security token")
 
     download_parser = subparsers.add_parser("download", help="Download SBOM")
-    download_group = download_parser.add_mutually_exclusive_group(required=True)
+    download_group = download_parser.add_mutually_exclusive_group(
+        required=True)
     download_group.add_argument("--prod", help="Product name")
     download_group.add_argument("--prodId", help="Product ID")
 
-    download_group = download_parser.add_mutually_exclusive_group(required=True)
+    download_group = download_parser.add_mutually_exclusive_group(
+        required=True)
     download_group.add_argument("--ver", help="Version")
     download_group.add_argument("--verId", help="Version ID")
 
@@ -186,10 +192,12 @@ def setup_log_level(args):
         logging.basicConfig(level=logging.ERROR)
     logging.basicConfig(level=logging.DEBUG)
 
+
 def setup_lynk_context(args):
     return LynkContext(
         os.environ.get('INTERLYNK_API_URL'),
-        getattr(args, 'token', None) or os.environ.get('INTERLYNK_SECURITY_TOKEN'),
+        getattr(args, 'token', None) or os.environ.get(
+            'INTERLYNK_SECURITY_TOKEN'),
         getattr(args, 'prodId', None),
         getattr(args, 'prod', None),
         getattr(args, 'envId', None),
@@ -197,7 +205,8 @@ def setup_lynk_context(args):
         getattr(args, 'verId', None),
         getattr(args, 'ver', None)
     )
-    
+
+
 def main() -> int:
     args = setup_args()
     setup_log_level(args)
@@ -207,17 +216,18 @@ def main() -> int:
 
     if args.subcommand == "prods":
         print_products(lynk_ctx)
-    elif args.subcommand == "vers":            
+    elif args.subcommand == "vers":
         print_versions(lynk_ctx)
     elif args.subcommand == "upload":
         upload_sbom(lynk_ctx, args.sbom)
     elif args.subcommand == "download":
         download_sbom(lynk_ctx)
     else:
-      print("Missing or invalid command. \
+        print("Missing or invalid command. \
             Supported commands: {prods, upload, download, sign, verify}")
-      exit(1)
+        exit(1)
     exit(0)
+
 
 if __name__ == "__main__":
     main()
