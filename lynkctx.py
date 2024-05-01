@@ -1,8 +1,8 @@
-import requests
+import os
 import json
 import logging
-import os
 import base64
+import requests
 
 INTERLYNK_API_URL = 'https://api.interlynk.io/lynkapi'
 
@@ -74,7 +74,7 @@ query downloadSbom($envId: Uuid!, $sbomId: Uuid!, $includeVulns: Boolean) {
 
 
 class LynkContext:
-    def __init__(self, api_url, token, prod_id, prod, env_id, env, ver_id, ver):
+    def __init__(self, api_url, token, prod_id, prod, env_id, env, ver_id, ver, output_file):
         self.api_url = api_url or INTERLYNK_API_URL
         self.token = token
         self.prod_id = prod_id
@@ -83,6 +83,7 @@ class LynkContext:
         self.env = env
         self.ver_id = ver_id
         self.ver = ver
+        self.output_file = output_file
 
     def validate(self):
         if not self.token:
