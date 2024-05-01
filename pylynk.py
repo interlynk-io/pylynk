@@ -18,6 +18,7 @@ import logging
 import datetime
 import pytz
 import tzlocal
+import sys
 from lynkctx import LynkContext
 
 
@@ -125,7 +126,9 @@ def download_sbom(lynk_ctx):
         print('Failed to fetch SBOM')
         return 1
 
-    print(sbom.encode("utf-8"))
+    #print(sbom.encode("utf-8"))
+    #print(sbom.encode('utf-8', errors='ignore').decode('utf-8'))
+    sys.stdout.buffer.write(sbom.encode("utf-8", errors='ignore'))
     return 0
 
 def upload_sbom(lynk_ctx, sbom_file):
@@ -176,6 +179,7 @@ def setup_args():
     download_parser.add_argument("--token",
                                  required=False,
                                  help="Security token")
+
 
     args = parser.parse_args()
     return args
