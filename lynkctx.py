@@ -146,6 +146,10 @@ class LynkContext:
 
     def resolve_env(self):
         env = self.env or 'default'
+        # For pre-configured environments, use case-insensitive comparison
+        if env.lower() in ['default', 'development', 'production']:
+            env = env.lower()
+
         if not self.env_id:
             for product in self.data.get('data', {}).get('organization', {}).get('productNodes', {}).get('products', []):
                 if product['id'] == self.prod_id:
