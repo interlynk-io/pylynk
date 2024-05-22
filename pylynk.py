@@ -39,7 +39,7 @@ def user_time(utc_time):
     return local_time.strftime('%Y-%m-%d %H:%M:%S %Z')
 
 
-def print_products(lynk_ctx):
+def print_products(lynk_ctx, fmt_json):
     """
     Print the products of the Lynk context.
 
@@ -47,6 +47,10 @@ def print_products(lynk_ctx):
         lynk_ctx (LynkContext): The Lynk context object.
     """
     products = lynk_ctx.prods()
+    if fmt_json:
+        print(json.dumps(products, indent=4))
+        return 0
+
 
     # Calculate dynamic column widths
     name_width = max(len("NAME"), max(len(prod['name'])
@@ -82,7 +86,7 @@ def print_products(lynk_ctx):
     return 0
 
 
-def print_versions(lynk_ctx):
+def print_versions(lynk_ctx, fmt_json):
     """
     Print the versions of the Lynk context.
 
@@ -92,6 +96,10 @@ def print_versions(lynk_ctx):
     versions = lynk_ctx.versions()
     if not versions:
         print('No versions found')
+        return 0
+
+    if fmt_json:
+        print(json.dumps(versions, indent=4))
         return 0
 
     # Calculate dynamic column widths
@@ -195,6 +203,10 @@ def setup_args():
     products_parser.add_argument("--token",
                                  required=False,
                                  help="Security token")
+    products_parser.add_argument("--json",
+                                 required=False,
+                                 action='store_true',
+                                 help="JSON Formatted")
 
     vers_parser = subparsers.add_parser("vers", help="List Versions")
     vers_group = vers_parser.add_mutually_exclusive_group(required=True)
@@ -206,6 +218,10 @@ def setup_args():
     vers_parser.add_argument("--token",
                              required=False,
                              help="Security token")
+    vers_parser.add_argument("--json",
+                             required=False,
+                             action='store_true',
+                             help="JSON Formatted")
 
     upload_parser = subparsers.add_parser("upload", help="Upload SBOM")
     upload_group = upload_parser.add_mutually_exclusive_group(required=True)
@@ -294,9 +310,9 @@ def main() -> int:
         exit(1)
 
     if args.subcommand == "prods":
-        print_products(lynk_ctx)
+        print_products(lynk_ctx, args.json)
     elif args.subcommand == "vers":
-        print_versions(lynk_ctx)
+        print_versions(lynk_ctx, args.json)
     elif args.subcommand == "upload":
         upload_sbom(lynk_ctx, args.sbom)
     elif args.subcommand == "download":
