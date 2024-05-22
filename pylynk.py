@@ -143,6 +143,14 @@ def print_versions(lynk_ctx):
     return 0
 
 
+def print_status(lynk_ctx):
+    status = lynk_ctx.status()
+    if status is None:
+        print('Failed to fetch status for the version')
+        return 1
+    print(status)
+
+
 def download_sbom(lynk_ctx):
     """
     Download SBOM from the lynk_ctx and save it to a file or print it to stdout.
@@ -204,6 +212,21 @@ def setup_args():
 
     vers_parser.add_argument("--env", help="Environment", required=False)
     vers_parser.add_argument("--token",
+                             required=False,
+                             help="Security token")
+
+    status_parser = subparsers.add_parser("status", help="SBOM Status")
+    status_group = status_parser.add_mutually_exclusive_group(required=True)
+
+    status_group.add_argument("--prod", help="Product name")
+    status_group.add_argument("--prodId", help="Product ID")
+
+    status_group = status_parser.add_mutually_exclusive_group(required=True)
+    status_group.add_argument("--ver", help="Version")
+    status_group.add_argument("--verId", help="Version ID")
+
+    status_parser.add_argument("--env", help="Environment", required=False)
+    status_parser.add_argument("--token",
                              required=False,
                              help="Security token")
 
@@ -297,6 +320,8 @@ def main() -> int:
         print_products(lynk_ctx)
     elif args.subcommand == "vers":
         print_versions(lynk_ctx)
+    elif args.subcommand == "status":
+        print_status(lynk_ctx)
     elif args.subcommand == "upload":
         upload_sbom(lynk_ctx, args.sbom)
     elif args.subcommand == "download":
