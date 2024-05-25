@@ -27,6 +27,7 @@ query GetProducts($name: String, $enabled: Boolean) {
           name: name
           versions: sboms {
             id
+            vulnRunStatus
             updatedAt
             primaryComponent {
               name
@@ -83,6 +84,7 @@ class LynkContext:
         self.env = env
         self.ver_id = ver_id
         self.ver = ver
+        self.ver_status = self.vuln_status_to_status('')
         self.output_file = output_file
 
     def validate(self):
@@ -173,6 +175,7 @@ class LynkContext:
                             for ver in env['versions']:
                                 if ver['primaryComponent']['version'] == self.ver:
                                     self.ver_id = ver['id']
+                                    self.ver_status = self.vuln_status_to_status(ver['vulnRunStatus'])
         if not self.ver:
             for product in self.data.get('data', {}).get('organization', {}).get('productNodes', {}).get('products', []):
                 if product['id'] == self.prod_id:
@@ -181,6 +184,8 @@ class LynkContext:
                             for ver in env['versions']:
                                 if ver['id'] == self.ver_id:
                                     self.ver = ver['primaryComponent']['version']
+                                    self.ver_status = self.vuln_status_to_status(ver['vulnRunStatus'])
+
         return self.ver and self.ver_id
 
     def __repr__(self):
@@ -214,6 +219,10 @@ class LynkContext:
         versions_node = next((env['versions'] for prod in prod_nodes if self.prod_id == prod['id']
                               for env in prod['environments'] if self.env_id == env['id']), None)
         return versions_node
+
+    def status(self):
+        self.resolve_ver()
+        return self.ver_status
 
     def download(self):
         logging.debug("Downloading SBOM for environment ID %s, sbom ID %s",
@@ -314,3 +323,13 @@ class LynkContext:
         except FileNotFoundError as ex:
             logging.error("FileNotFoundError: %s", ex)
         return 1
+
+    def vuln_status_to_status(self, status):
+        if status == 'NOT_STARTED':
+            return 'CHECKS_IN_PRORGRESS'
+        elif status == 'IN_PROGRESS':
+            return 'VULN_SCAN_IN_PROGRESS'
+        elif status == 'FINISHED':
+            return 'VULN_SCAN_COMPLETED'
+        return 'UNKNOWN_STATUS'
+
