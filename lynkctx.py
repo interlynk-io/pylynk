@@ -176,6 +176,7 @@ class LynkContext:
                                 if ver['primaryComponent']['version'] == self.ver:
                                     self.ver_id = ver['id']
                                     self.ver_status = self.vuln_status_to_status(ver['vulnRunStatus'])
+        empty_ver = False
         if not self.ver:
             for product in self.data.get('data', {}).get('organization', {}).get('productNodes', {}).get('products', []):
                 if product['id'] == self.prod_id:
@@ -184,9 +185,11 @@ class LynkContext:
                             for ver in env['versions']:
                                 if ver['id'] == self.ver_id:
                                     self.ver = ver['primaryComponent']['version']
+                                    if not self.ver:
+                                        empty_ver = True
                                     self.ver_status = self.vuln_status_to_status(ver['vulnRunStatus'])
 
-        return self.ver and self.ver_id
+        return (empty_ver or self.ver) and self.ver_id
 
     def __repr__(self):
         from pprint import pformat
