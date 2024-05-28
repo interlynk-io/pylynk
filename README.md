@@ -62,6 +62,28 @@ NAME   | ID                                   | VERSIONS | UPDATED AT           
 -----------------------------------------------------------------------------------|
 sbomqs | 478ba2d2-ec5c-4eec-afb7-85a72fe17bd3 | 1        | 2024-02-29 01:07:59 PST |
 sbomex | e865710e-b262-4f44-9078-970052794a60 | 1        | 2024-02-29 01:05:24 PST |
+
+```
+# List Products as JSON
+```bash
+python3 pylynk.py prods --json
+```
+Output
+```
+[
+    {
+        "name": "sbomqs",
+        "updatedAt": "2024-02-29T09:07:59Z",
+        "id": "478ba2d2-ec5c-4eec-afb7-85a72fe17bd3",
+        "versions": 1
+    },
+    {
+        "name": "sbomex",
+        "updatedAt": "2024-02-29T09:05:24Z",
+        "id": "e865710e-b262-4f44-9078-970052794a60",
+        "versions": 1
+    }
+]
 ```
 
 # List Environments
@@ -77,6 +99,24 @@ Output
 ID                                   | VERSION                                                                 | PRIMARY COMPONENT     | UPDATED AT              |
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------|
 fbcc24ad-5911-4229-8943-acf863c07bb4 | sha256:5ed7e95ae79fe3fe6c4b8660f6f9e31154e64eca76ae42963a679fbb198c3951 | centos:centos7.9.2009 | 2024-02-29 01:05:24 PST |
+```
+## List Versions by product ID (default environment) as JSON
+```bash
+python3 pylynk.py vers --prodId 'e865710e-b262-4f44-9078-970052794a60' --json
+```
+Output
+```bash
+[
+    {
+        "id": "fbcc24ad-5911-4229-8943-acf863c07bb4",
+        "vulnRunStatus": "FINISHED",
+        "updatedAt": "2024-02-29T09:05:24Z",
+        "primaryComponent": {
+            "name": "centos:centos7.9.2009",
+            "version": "sha256:5ed7e95ae79fe3fe6c4b8660f6f9e31154e64eca76ae42963a679fbb198c3951"
+        }
+    }
+]
 ```
 ## List Versions by product name (default environment)
 ```bash
@@ -102,6 +142,22 @@ ID                                   | VERSION                                  
 ```
 ## List Versions for specific environment ID
 TBD
+
+# Status of a specific version 
+Possible Version Status values are:
+1. CHECKS_IN_PRORGRESS
+2. VULN_SCAN_IN_PROGRESS
+3. VULN_SCAN_COMPLETED
+4. UNKNOWN_STATUS
+
+## Status of a specific version by version ID
+```bash
+python3 pylynk.py vers --prodId 'e865710e-b262-4f44-9078-970052794a60' --verId 'fbcc24ad-5911-4229-8943-acf863c07bb4'
+```
+Output
+```bash
+VULN_SCAN_COMPLETED
+```
 
 # Download SBOM
 ## Download SBOM for specific version by version ID
@@ -132,7 +188,7 @@ Output
 ```
 Uploaded successfully
 ```
-## Upload SBOM to specific environment
+## Upload SBOM to a specific environment
 Upload SBOM file sbomqs.cdx.json to the product named **sbomqs** under environment **production**
 ```bash
 python3 pylynk.py upload --prod 'sbomqs' --env 'production' --sbom sbomqs.cdx.json
