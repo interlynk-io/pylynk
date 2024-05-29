@@ -152,7 +152,7 @@ Possible Version Status values are:
 
 ## Status of a specific version by version ID
 ```bash
-python3 pylynk.py vers --prodId 'e865710e-b262-4f44-9078-970052794a60' --verId 'fbcc24ad-5911-4229-8943-acf863c07bb4'
+python3 pylynk.py status --prodId 'e865710e-b262-4f44-9078-970052794a60' --verId 'fbcc24ad-5911-4229-8943-acf863c07bb4'
 ```
 Output
 ```bash
