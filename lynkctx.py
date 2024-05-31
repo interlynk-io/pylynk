@@ -329,7 +329,7 @@ class LynkContext:
 
     def vuln_status_to_status(self, status):
         if status == 'NOT_STARTED':
-            return 'CHECKS_IN_PRORGRESS'
+            return 'CHECKS_IN_PROGRESS'
         elif status == 'IN_PROGRESS':
             return 'VULN_SCAN_IN_PROGRESS'
         elif status == 'FINISHED':
