@@ -328,11 +328,29 @@ class LynkContext:
         return 1
 
     def vuln_status_to_status(self, status):
+        result_dict = dict()
+        result_dict['checksStatus'] = 'UNKNOWN'
+        result_dict['policyStatus'] = 'UNKNOWN'
+        result_dict['labelingStatus'] = 'UNKNOWN'
+        result_dict['automationStatus'] = 'UNKNOWN'
+        result_dict['vulnScanStatus'] = 'UNKNOWN'
         if status == 'NOT_STARTED':
-            return 'CHECKS_IN_PROGRESS'
+            result_dict['vulnScanStatus'] = 'NOT_STARTED'
+            result_dict['checksStatus'] = 'NOT_STARTED'
+            result_dict['policyStatus'] = 'NOT_STARTED'
+            result_dict['labelingStatus'] = 'NOT_STARTED'
+            result_dict['automationStatus'] = 'NOT_STARTED'
         elif status == 'IN_PROGRESS':
-            return 'VULN_SCAN_IN_PROGRESS'
+            result_dict['vulnScanStatus'] = 'IN_PROGRESS'
+            result_dict['checksStatus'] = 'COMPLETED'
+            result_dict['policyStatus'] = 'COMPLETED'
+            result_dict['labelingStatus'] = 'COMPLETED'
+            result_dict['automationStatus'] = 'COMPLETED'
         elif status == 'FINISHED':
-            return 'VULN_SCAN_COMPLETED'
-        return 'UNKNOWN_STATUS'
+            result_dict['vulnScanStatus'] = 'COMPLETED'
+            result_dict['checksStatus'] = 'COMPLETED'
+            result_dict['policyStatus'] = 'COMPLETED'
+            result_dict['labelingStatus'] = 'COMPLETED'
+            result_dict['automationStatus'] = 'COMPLETED'
+        return result_dict
 
