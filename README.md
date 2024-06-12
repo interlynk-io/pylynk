@@ -1,12 +1,12 @@
 <!--
  Copyright 2024 Interlynk.io
- 
+
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
  You may obtain a copy of the License at
- 
+
      http://www.apache.org/licenses/LICENSE-2.0
- 
+
  Unless required by applicable law or agreed to in writing, software
  distributed under the License is distributed on an "AS IS" BASIS,
  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -89,7 +89,7 @@ Output
 # List Environments
 TBD
 
-# List Versions 
+# List Versions
 ## List Versions by product ID (default environment)
 ```bash
 python3 pylynk.py vers --prodId 'e865710e-b262-4f44-9078-970052794a60'
@@ -143,12 +143,19 @@ ID                                   | VERSION                                  
 ## List Versions for specific environment ID
 TBD
 
-# Status of a specific version 
-Possible Version Status values are:
-1. CHECKS_IN_PRORGRESS
-2. VULN_SCAN_IN_PROGRESS
-3. VULN_SCAN_COMPLETED
-4. UNKNOWN_STATUS
+# Status of a specific version
+The status of actions associated with SBOM is reported in three states:
+1. UNKNOWN
+2. NOT_STARTED
+3. IN_PROGRESS
+4. COMPLETED
+
+This applies to the following SBOM actions (represented with specific keys):
+1. SBOM Checks (Key: `checksStatus`)
+2. SBOM Policies (Key: `policyStatus`)
+3. SBOM Internal Labeling (Key: `labelingStatus`)
+4. SBOM Automation Rules (Key: `automationStatus`)
+5. SBOM Vulnerability Scan (Key: `vulnScanStatus`)
 
 ## Status of a specific version by version ID
 ```bash
@@ -156,7 +163,13 @@ python3 pylynk.py status --prodId 'e865710e-b262-4f44-9078-970052794a60' --verId
 ```
 Output
 ```bash
-VULN_SCAN_COMPLETED
+{
+  "checksStatus": "COMPLETED",
+  "policyStatus": "COMPLETED",
+  "labelingStatus": "UNKNOWN",
+  "automationStatus": "IN_PROGRESS",
+  "vulnScanStatus": "NOT_STARTED"
+}
 ```
 
 # Download SBOM
@@ -202,7 +215,7 @@ Uploaded successfully
 Use `--verbose` or `-v` with any command to see debug output.
 
 
-##  Debugging 
+##  Debugging
 To point to a different API endpoint than production
 ```bash
 export INTERLYNK_API_URL=http://localhost:3000/lynkapi
@@ -214,16 +227,16 @@ export INTERLYNK_API_URL=http://localhost:3000/lynkapi
 - [SBOM Search Tool](https://github.com/interlynk-io/sbomagr) - A tool to grep style semantic search in SBOMs
 - [SBOM Explorer](https://github.com/interlynk-io/sbomex) - A tool for discovering and downloading SBOM from a public repository
 
-# Contact 
+# Contact
 We appreciate all feedback. The best ways to get in touch with us:
 - :phone: [Live Chat](https://www.interlynk.io/#hs-chat-open)
 - 📫 [Email Us](mailto:hello@interlynk.io)
-- 🐛 [Report a bug or enhancement](https://github.com/interlynk-io/sbomex/issues) 
+- 🐛 [Report a bug or enhancement](https://github.com/interlynk-io/sbomex/issues)
 - :x: [Follow us on X](https://twitter.com/InterlynkIo)
 
 # Stargazers
 
-If you like this project, please support us by starring it. 
+If you like this project, please support us by starring it.
 
 [![Stargazers](https://starchart.cc/interlynk-io/pylynk.svg)](https://starchart.cc/interlynk-io/pylynk)
 
