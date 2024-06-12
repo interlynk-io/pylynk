@@ -156,7 +156,7 @@ def print_status(lynk_ctx):
     if status is None:
         print('Failed to fetch status for the version')
         return 1
-    print(status)
+    json.dump(status, sys.stdout, indent=4, ensure_ascii=False)
 
 
 def download_sbom(lynk_ctx):
