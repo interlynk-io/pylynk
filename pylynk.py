@@ -151,13 +151,39 @@ def print_versions(lynk_ctx, fmt_json):
     return 0
 
 
-def print_status(lynk_ctx):
+def print_status(lynk_ctx, fmt_json):
     status = lynk_ctx.status()
     if status is None:
         print('Failed to fetch status for the version')
         return 1
-    json.dump(status, sys.stdout, indent=4, ensure_ascii=False)
+    if fmt_json:
+        json.dump(status, sys.stdout, indent=4, ensure_ascii=False)
+        return 0
 
+    # Calculate dynamic column widths
+    key_width = 20
+    value_width = 20
+
+    # Format the header with dynamic column widths
+    header = (
+        f"{'ACTION KEY':<{key_width}} | "
+        f"{'STATUS':<{value_width}}"
+    )
+    print(header)
+
+    # Add a horizontal line after the header
+    # 12 is the total length of separators and spaces
+    width = key_width + value_width + 5
+    line = "-" * width + "|"
+    print(line)
+
+    # Format each row with dynamic column widths and a bar between elements
+    for key, value in status.items():
+        row = (
+            f"{key:<{key_width}} | "
+            f"{value:<{value_width}}  |"
+        )
+        print(row)
 
 def download_sbom(lynk_ctx):
     """
@@ -198,6 +224,13 @@ def upload_sbom(lynk_ctx, sbom_file):
     """
     return lynk_ctx.upload(sbom_file)
 
+def add_output_format_group(parser):
+    """
+    Adds mutually exclusive output format arguments (--json and --table) to the parser.
+    """
+    output_group = parser.add_mutually_exclusive_group()
+    output_group.add_argument("--json", action='store_true', help="JSON Formatted (default)")
+    output_group.add_argument("--table", action='store_true', help="Table Formatted")
 
 def setup_args():
     """
@@ -211,10 +244,7 @@ def setup_args():
     products_parser.add_argument("--token",
                                  required=False,
                                  help="Security token")
-    products_parser.add_argument("--json",
-                                 required=False,
-                                 action='store_true',
-                                 help="JSON Formatted")
+    add_output_format_group(products_parser)
 
     vers_parser = subparsers.add_parser("vers", help="List Versions")
     vers_group = vers_parser.add_mutually_exclusive_group(required=True)
@@ -226,10 +256,8 @@ def setup_args():
     vers_parser.add_argument("--token",
                              required=False,
                              help="Security token")
-    vers_parser.add_argument("--json",
-                             required=False,
-                             action='store_true',
-                             help="JSON Formatted")
+    add_output_format_group(vers_parser)
+
 
     status_parser = subparsers.add_parser("status", help="SBOM Status")
     status_group = status_parser.add_mutually_exclusive_group(required=True)
@@ -245,6 +273,7 @@ def setup_args():
     status_parser.add_argument("--token",
                              required=False,
                              help="Security token")
+    add_output_format_group(status_parser)
 
     upload_parser = subparsers.add_parser("upload", help="Upload SBOM")
     upload_group = upload_parser.add_mutually_exclusive_group(required=True)
@@ -332,12 +361,13 @@ def main() -> int:
     if not lynk_ctx.validate():
         exit(1)
 
+    fmt_json = not args.table
     if args.subcommand == "prods":
-        print_products(lynk_ctx, args.json)
+        print_products(lynk_ctx, fmt_json)
     elif args.subcommand == "vers":
-        print_versions(lynk_ctx, args.json)
+        print_versions(lynk_ctx, fmt_json)
     elif args.subcommand == "status":
-        print_status(lynk_ctx)
+        print_status(lynk_ctx, fmt_json)
     elif args.subcommand == "upload":
         upload_sbom(lynk_ctx, args.sbom)
     elif args.subcommand == "download":
