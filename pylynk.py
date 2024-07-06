@@ -361,7 +361,7 @@ def main() -> int:
     if not lynk_ctx.validate():
         exit(1)
 
-    fmt_json = not args.table
+    fmt_json = not getattr(args, 'table', False)
     if args.subcommand == "prods":
         print_products(lynk_ctx, fmt_json)
     elif args.subcommand == "vers":
