@@ -19,7 +19,7 @@ import argparse
 import logging
 import datetime
 import pytz
-import tzlocal
+import time
 from lynkctx import LynkContext
 
 
@@ -33,9 +33,16 @@ def user_time(utc_time):
     Returns:
         str: The local time formatted as a string.
     """
+    # Parse the input UTC time
     timestamp = datetime.datetime.fromisoformat(utc_time[:-1])
-    local_timezone = tzlocal.get_localzone()
+
+    # Get the local timezone
+    local_timezone = datetime.timezone(datetime.timedelta(seconds=-time.timezone))
+
+    # Convert the UTC time to local time
     local_time = timestamp.replace(tzinfo=pytz.UTC).astimezone(local_timezone)
+
+    # Format and return the local time as a string
     return local_time.strftime('%Y-%m-%d %H:%M:%S %Z')
 
 
