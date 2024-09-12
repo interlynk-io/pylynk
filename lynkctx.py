@@ -8,12 +8,33 @@ INTERLYNK_API_URL = 'https://api.interlynk.io/lynkapi'
 
 INTERLYNK_API_TIMEOUT = 100
 
-QUERY_PRODUCTS_LIST = """
-query GetProducts($name: String, $enabled: Boolean) {
+QUERY_PRODUCTS_TOTAL_COUNT = """
+query GetProductsCount($name: String, $enabled: Boolean) {
   organization {
     productNodes: projectGroups(
       search: $name
       enabled: $enabled
+      orderBy: { field: PROJECT_GROUPS_UPDATED_AT, direction: DESC }
+    ) {
+      prodCount: totalCount
+    }
+  }
+}
+"""
+
+QUERY_PROJECT_COUNT_PARAMS = {
+    'operationName': 'GetProductsCount',
+    'variables': {},
+    'query': QUERY_PRODUCTS_TOTAL_COUNT
+}
+
+
+QUERY_PRODUCTS_LIST = """
+query GetProducts($first: Int) {
+  organization {
+    productNodes: projectGroups(
+      enabled: true
+      first: $first
       orderBy: { field: PROJECT_GROUPS_UPDATED_AT, direction: DESC }
     ) {
       prodCount: totalCount
@@ -92,6 +113,13 @@ class LynkContext:
             print("Security token not found")
             return False
 
+        self.products_count = self._fetch_product_count()
+        if not self.products_count or self.products_count.get('errors'):
+            print("Error getting products count")
+            print(
+                "Possible problems: invalid security token, stale pylynk or invalid INTERLYNK_API_URL")
+            return False
+
         self.data = self._fetch_context()
         if not self.data or self.data.get('errors'):
             print("Error getting Interlynk data")
@@ -116,12 +144,43 @@ class LynkContext:
 
         return True
 
-    def _fetch_context(self):
+    def _fetch_product_count(self):
         headers = {"Authorization": "Bearer " + self.token}
         try:
             response = requests.post(self.api_url,
                                      headers=headers,
-                                     data=QUERY_PROJECT_PARAMS,
+                                     data=QUERY_PROJECT_COUNT_PARAMS,
+                                     timeout=INTERLYNK_API_TIMEOUT)
+            if response.status_code == 200:
+                response_data = response.json()
+                logging.debug(
+                    "Products count response text: %s", response_data)
+                return response_data
+            logging.error("Error fetching products: %s", response.status_code)
+        except requests.exceptions.RequestException as ex:
+            logging.error("RequestException: %s", ex)
+        except json.JSONDecodeError as ex:
+            logging.error("JSONDecodeError: %s", ex)
+        return None
+
+    def _fetch_context(self):
+        headers = {"Authorization": "Bearer " + self.token}
+        product_count = self.products_count.get(
+            'data', {}).get('organization', {}).get('productNodes', {}).get('prodCount', 0)
+
+        variables = {
+            "first": product_count
+        }
+
+        request_data = {
+            "query": QUERY_PRODUCTS_LIST,
+            "variables": variables,
+        }
+
+        try:
+            response = requests.post(self.api_url,
+                                     headers=headers,
+                                     json=request_data,
                                      timeout=INTERLYNK_API_TIMEOUT)
             if response.status_code == 200:
                 response_data = response.json()
@@ -175,7 +234,8 @@ class LynkContext:
                             for ver in env['versions']:
                                 if ver['primaryComponent']['version'] == self.ver:
                                     self.ver_id = ver['id']
-                                    self.ver_status = self.vuln_status_to_status(ver['vulnRunStatus'])
+                                    self.ver_status = self.vuln_status_to_status(
+                                        ver['vulnRunStatus'])
         empty_ver = False
         if not self.ver:
             for product in self.data.get('data', {}).get('organization', {}).get('productNodes', {}).get('products', []):
@@ -187,7 +247,8 @@ class LynkContext:
                                     self.ver = ver['primaryComponent']['version']
                                     if not self.ver:
                                         empty_ver = True
-                                    self.ver_status = self.vuln_status_to_status(ver['vulnRunStatus'])
+                                    self.ver_status = self.vuln_status_to_status(
+                                        ver['vulnRunStatus'])
 
         return (empty_ver or self.ver) and self.ver_id
 
@@ -353,4 +414,3 @@ class LynkContext:
             result_dict['labelingStatus'] = 'COMPLETED'
             result_dict['automationStatus'] = 'COMPLETED'
         return result_dict
-

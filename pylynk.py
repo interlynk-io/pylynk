@@ -37,7 +37,8 @@ def user_time(utc_time):
     timestamp = datetime.datetime.fromisoformat(utc_time[:-1])
 
     # Get the local timezone
-    local_timezone = datetime.timezone(datetime.timedelta(seconds=-time.timezone))
+    local_timezone = datetime.timezone(
+        datetime.timedelta(seconds=-time.timezone))
 
     # Convert the UTC time to local time
     local_time = timestamp.replace(tzinfo=pytz.UTC).astimezone(local_timezone)
@@ -57,7 +58,6 @@ def print_products(lynk_ctx, fmt_json):
     if fmt_json:
         print(json.dumps(products, indent=4))
         return 0
-
 
     # Calculate dynamic column widths
     name_width = max(len("NAME"), max(len(prod['name'])
@@ -192,6 +192,7 @@ def print_status(lynk_ctx, fmt_json):
         )
         print(row)
 
+
 def download_sbom(lynk_ctx):
     """
     Download SBOM from the lynk_ctx and save it to a file or print it to stdout.
@@ -231,13 +232,17 @@ def upload_sbom(lynk_ctx, sbom_file):
     """
     return lynk_ctx.upload(sbom_file)
 
+
 def add_output_format_group(parser):
     """
     Adds mutually exclusive output format arguments (--json and --table) to the parser.
     """
     output_group = parser.add_mutually_exclusive_group()
-    output_group.add_argument("--json", action='store_true', help="JSON Formatted (default)")
-    output_group.add_argument("--table", action='store_true', help="Table Formatted")
+    output_group.add_argument(
+        "--json", action='store_true', help="JSON Formatted (default)")
+    output_group.add_argument(
+        "--table", action='store_true', help="Table Formatted")
+
 
 def setup_args():
     """
@@ -265,7 +270,6 @@ def setup_args():
                              help="Security token")
     add_output_format_group(vers_parser)
 
-
     status_parser = subparsers.add_parser("status", help="SBOM Status")
     status_group = status_parser.add_mutually_exclusive_group(required=True)
 
@@ -278,8 +282,8 @@ def setup_args():
 
     status_parser.add_argument("--env", help="Environment", required=False)
     status_parser.add_argument("--token",
-                             required=False,
-                             help="Security token")
+                               required=False,
+                               help="Security token")
     add_output_format_group(status_parser)
 
     upload_parser = subparsers.add_parser("upload", help="Upload SBOM")
