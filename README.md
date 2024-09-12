@@ -54,7 +54,7 @@ python3 pylynk.py prods --token lynk_test_GDGEB2j6jnhkzLSAQk9U3wiiQLrbNT11Y8J4
 
 # List Products
 ```bash
-python3 pylynk.py prods
+python3 pylynk.py prods --table
 ```
 Output
 ```
@@ -92,7 +92,7 @@ TBD
 # List Versions
 ## List Versions by product ID (default environment)
 ```bash
-python3 pylynk.py vers --prodId 'e865710e-b262-4f44-9078-970052794a60'
+python3 pylynk.py vers --prodId 'e865710e-b262-4f44-9078-970052794a60' --table
 ```
 Output
 ```bash
@@ -120,7 +120,7 @@ Output
 ```
 ## List Versions by product name (default environment)
 ```bash
-python3 pylynk.py vers --prod 'sbom-exec'
+python3 pylynk.py vers --prod 'sbom-exec' --table
 ```
 Output
 ```bash
@@ -132,7 +132,7 @@ e0b1fb60-03de-4202-b316-51422351b96b | 1.3     | agdfda                  | 2024-
 ```
 ## List Versions for specific environment by name
 ```bash
-python3 pylynk.py vers --prod 'sbomqs' --env 'production'
+python3 pylynk.py vers --prod 'sbomqs' --env 'production' --table
 ```
 Output
 ```bash
