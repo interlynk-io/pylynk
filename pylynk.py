@@ -110,19 +110,13 @@ def print_versions(lynk_ctx, fmt_json):
         return 0
 
     # Calculate dynamic column widths
-    id_width = max(len('ID'), max(len(sbom['id'])
-                                  for sbom in versions))
-    version_width = max(len('VERSION'),
-                        max(len(s.get('primaryComponent', {})
-                                .get('version', ''))
-                        for s in versions))
-    primary_component_width = max(len('PRIMARY COMPONENT'),
-                                  max(len(sbom.get('primaryComponent', {})
-                                          .get('name', ''))
-                                      for sbom in versions))
+    id_width = max(len('ID'), max(len(sbom['id']) for sbom in versions))
+    version_width = max(len('VERSION'), max(
+        len(str(s.get('primaryComponent', {}).get('version', ''))) for s in versions))
+    primary_component_width = max(len('PRIMARY COMPONENT'), max(
+        len(str(sbom.get('primaryComponent', {}) .get('name', ''))) for sbom in versions))
     updated_at_width = max(len('UPDATED AT'),
-                           max(len(user_time(sbom['updatedAt']))
-                               for sbom in versions))
+                           max(len(user_time(sbom['updatedAt'])) for sbom in versions))
 
     # Format the header with dynamic column widths
     header = (
@@ -149,7 +143,7 @@ def print_versions(lynk_ctx, fmt_json):
         primary_component = sbom.get('primaryComponent', {}).get('name', '')
         row = (
             f"{sbom['id']:<{id_width}} | "
-            f"{version:<{version_width}} | "
+            f"{str(version):<{version_width}} | "
             f"{primary_component:<{primary_component_width}} | "
             f"{user_time(sbom['updatedAt']):<{updated_at_width}} |"
         )
