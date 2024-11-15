@@ -224,7 +224,23 @@ def upload_sbom(lynk_ctx, sbom_file):
     Returns:
         The result of the upload operation.
     """
-    return lynk_ctx.upload(sbom_file)
+    # return lynk_ctx.upload(sbom_file)
+    upload_result = lynk_ctx.upload(sbom_file)
+    if upload_result != 0:
+        return 1
+    
+    if True:
+        while True:
+            status = lynk_ctx.status()
+
+            if status.get('automationStatus') == "COMPLETED":
+                download_sbom(lynk_ctx)
+                break
+            else:
+                print("Waiting for automation status to complete...")
+                time.sleep(5)
+
+    return 0
 
 
 def add_output_format_group(parser):

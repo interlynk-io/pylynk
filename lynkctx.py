@@ -4,7 +4,9 @@ import logging
 import base64
 import requests
 
-INTERLYNK_API_URL = 'https://api.interlynk.io/lynkapi'
+# INTERLYNK_API_URL = 'https://api.interlynk.io/lynkapi'
+
+INTERLYNK_API_URL = 'http://localhost:3000/lynkapi'
 
 INTERLYNK_API_TIMEOUT = 100
 
@@ -77,6 +79,7 @@ mutation uploadSbom($doc: Upload!, $projectId: ID!) {
       projectId: $projectId
     }
   ) {
+    id
     errors
   }
 }
@@ -226,16 +229,20 @@ class LynkContext:
 
     def resolve_ver(self):
         env = self.env or 'default'
+        self.data = self._fetch_context()
+
         if not self.ver_id:
             for product in self.data.get('data', {}).get('organization', {}).get('productNodes', {}).get('products', []):
                 if product['id'] == self.prod_id:
                     for env in product['environments']:
                         if env['id'] == self.env_id:
                             for ver in env['versions']:
-                                if ver['primaryComponent']['version'] == self.ver:
+                                if ver.get('primaryComponent') and ver['primaryComponent'].get('version') == self.ver:
                                     self.ver_id = ver['id']
                                     self.ver_status = self.vuln_status_to_status(
-                                        ver['vulnRunStatus'])
+                                        ver['vulnRunStatus']
+                                    )
+
         empty_ver = False
         if not self.ver:
             for product in self.data.get('data', {}).get('organization', {}).get('productNodes', {}).get('products', []):
@@ -244,11 +251,13 @@ class LynkContext:
                         if env['id'] == self.env_id:
                             for ver in env['versions']:
                                 if ver['id'] == self.ver_id:
-                                    self.ver = ver['primaryComponent']['version']
+                                    if ver.get('primaryComponent'):
+                                        self.ver = ver['primaryComponent'].get('version')
                                     if not self.ver:
                                         empty_ver = True
                                     self.ver_status = self.vuln_status_to_status(
-                                        ver['vulnRunStatus'])
+                                        ver['vulnRunStatus']
+                                    )
 
         return (empty_ver or self.ver) and self.ver_id
 
@@ -290,7 +299,7 @@ class LynkContext:
 
     def download(self):
         logging.debug("Downloading SBOM for environment ID %s, sbom ID %s",
-                      self.env_id, self.ver_id)
+                    self.env_id, self.ver_id)
 
         variables = {
             "envId": self.env_id,
@@ -304,10 +313,10 @@ class LynkContext:
         }
 
         response = requests.post(self.api_url,
-                                 headers={
-                                     "Authorization": "Bearer " + self.token},
-                                 json=request_data,
-                                 timeout=INTERLYNK_API_TIMEOUT)
+                                headers={
+                                    "Authorization": "Bearer " + self.token},
+                                json=request_data,
+                                timeout=INTERLYNK_API_TIMEOUT)
 
         if response.status_code == 200:
             try:
@@ -319,19 +328,32 @@ class LynkContext:
                     return None
 
                 sbom = data.get('data', {}).get('sbom', {})
-                if sbom is None:
+                if not sbom:
                     print('No SBOM matched with the given ID')
-                    logging.debug(data)
+                    logging.debug("Response data: %s", data)
                     return None
+
                 b64data = sbom.get('download')
-                decoded_content = base64.b64decode(b64data)
-                logging.debug('Completed download and decoding')
-                return decoded_content.decode('utf-8')
+                if not b64data:
+                    print('SBOM data is not available for download.')
+                    logging.debug("SBOM details: %s", sbom)
+                    return None
+
+                try:
+                    decoded_content = base64.b64decode(b64data)
+                    logging.debug('Completed download and decoding')
+                    return decoded_content.decode('utf-8')
+                except (TypeError, ValueError) as e:
+                    logging.error("Error decoding SBOM content: %s", e)
+                    return None
+
             except json.JSONDecodeError:
                 logging.error("Failed to parse JSON response.")
+                return None
         else:
             logging.error("Failed to send GraphQL request. Status code: %s",
-                          response.status_code)
+                        response.status_code)
+            return None
 
     def upload(self, sbom_file):
         if os.path.isfile(sbom_file) is False:
@@ -373,11 +395,22 @@ class LynkContext:
                                          timeout=INTERLYNK_API_TIMEOUT)
                 if response.status_code == 200:
                     resp_json = response.json()
+                    version_id = resp_json.get('data', {}).get('sbomUpload', {}).get('id')
+
                     errors = resp_json.get('data', {}).get(
                         'sbomUpload', {}).get('errors')
+                    
                     if errors:
                         print(f"Error uploading sbom: {errors}")
                         return 1
+                    
+                    if version_id:
+                        self.ver_id = version_id
+                        logging.debug("SBOM upload response: %s", response.text)
+                    else:
+                        print("Error: SBOM ID not returned in the response.")
+                        return 0
+                    
                     print('Uploaded successfully')
                     logging.debug("SBOM Uploading response: %s", response.text)
                     return 0
