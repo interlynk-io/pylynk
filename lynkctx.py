@@ -4,9 +4,7 @@ import logging
 import base64
 import requests
 
-# INTERLYNK_API_URL = 'https://api.interlynk.io/lynkapi'
-
-INTERLYNK_API_URL = 'http://localhost:3000/lynkapi'
+INTERLYNK_API_URL = 'https://api.interlynk.io/lynkapi'
 
 INTERLYNK_API_TIMEOUT = 100
 
@@ -229,20 +227,16 @@ class LynkContext:
 
     def resolve_ver(self):
         env = self.env or 'default'
-        self.data = self._fetch_context()
-
         if not self.ver_id:
             for product in self.data.get('data', {}).get('organization', {}).get('productNodes', {}).get('products', []):
                 if product['id'] == self.prod_id:
                     for env in product['environments']:
                         if env['id'] == self.env_id:
                             for ver in env['versions']:
-                                if ver.get('primaryComponent') and ver['primaryComponent'].get('version') == self.ver:
+                                if ver['primaryComponent']['version'] == self.ver:
                                     self.ver_id = ver['id']
                                     self.ver_status = self.vuln_status_to_status(
-                                        ver['vulnRunStatus']
-                                    )
-
+                                        ver['vulnRunStatus'])
         empty_ver = False
         if not self.ver:
             for product in self.data.get('data', {}).get('organization', {}).get('productNodes', {}).get('products', []):
@@ -251,13 +245,11 @@ class LynkContext:
                         if env['id'] == self.env_id:
                             for ver in env['versions']:
                                 if ver['id'] == self.ver_id:
-                                    if ver.get('primaryComponent'):
-                                        self.ver = ver['primaryComponent'].get('version')
+                                    self.ver = ver['primaryComponent']['version']
                                     if not self.ver:
                                         empty_ver = True
                                     self.ver_status = self.vuln_status_to_status(
-                                        ver['vulnRunStatus']
-                                    )
+                                        ver['vulnRunStatus'])
 
         return (empty_ver or self.ver) and self.ver_id
 
@@ -296,6 +288,11 @@ class LynkContext:
     def status(self):
         self.resolve_ver()
         return self.ver_status
+    
+    def live_status(self):
+        self.resolve_ver_status()
+        return self.ver_status
+
 
     def download(self):
         logging.debug("Downloading SBOM for environment ID %s, sbom ID %s",
@@ -447,3 +444,60 @@ class LynkContext:
             result_dict['labelingStatus'] = 'COMPLETED'
             result_dict['automationStatus'] = 'COMPLETED'
         return result_dict
+
+
+    def resolve_ver_status(self):
+        """
+        Resolve version ID (ver_id) and version (ver) for the current context.
+        """
+        self.data = self._fetch_context()
+
+        # ver_id is present
+        if self.ver_id:
+            self._update_ver_status()
+            return self.ver_id
+
+        # ver_id is not present
+        self._resolve_ver_id()
+
+        # ver is not present
+        if not self.ver:
+            self._resolve_ver_value()
+
+        return self.ver_id and self.ver
+
+    def _update_ver_status(self):
+        """Update the status of the version based on ver_id."""
+        for product in self.data.get('data', {}).get('organization', {}).get('productNodes', {}).get('products', []):
+            if product['id'] == self.prod_id:
+                for env in product['environments']:
+                    if env['id'] == self.env_id:
+                        for ver in env['versions']:
+                            if ver['id'] == self.ver_id:
+                                self.ver_status = self.vuln_status_to_status(ver['vulnRunStatus'])
+
+    def _resolve_ver_id(self):
+        """Resolve ver_id based on ver."""
+        for product in self.data.get('data', {}).get('organization', {}).get('productNodes', {}).get('products', []):
+            if product['id'] == self.prod_id:
+                for env in product['environments']:
+                    if env['id'] == self.env_id:
+                        for ver in env['versions']:
+                            if ver.get('primaryComponent') and ver['primaryComponent'].get('version') == self.ver:
+                                self.ver_id = ver['id']
+                                self.ver_status = self.vuln_status_to_status(ver['vulnRunStatus'])
+
+    def _resolve_ver_value(self):
+        """Resolve the version value (ver) based on ver_id."""
+        empty_ver = False
+        for product in self.data.get('data', {}).get('organization', {}).get('productNodes', {}).get('products', []):
+            if product['id'] == self.prod_id:
+                for env in product['environments']:
+                    if env['id'] == self.env_id:
+                        for ver in env['versions']:
+                            if ver['id'] == self.ver_id:
+                                if ver.get('primaryComponent'):
+                                    self.ver = ver['primaryComponent'].get('version')
+                                if not self.ver:
+                                    empty_ver = True
+        return empty_ver

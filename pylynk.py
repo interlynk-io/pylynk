@@ -213,7 +213,7 @@ def download_sbom(lynk_ctx):
     return 0
 
 
-def upload_sbom(lynk_ctx, sbom_file):
+def upload_sbom(lynk_ctx, sbom_file, download):
     """
     Upload SBOM to the lynk_ctx.
 
@@ -224,22 +224,27 @@ def upload_sbom(lynk_ctx, sbom_file):
     Returns:
         The result of the upload operation.
     """
-    # return lynk_ctx.upload(sbom_file)
     upload_result = lynk_ctx.upload(sbom_file)
     if upload_result != 0:
         return 1
     
-    if True:
-        while True:
-            status = lynk_ctx.status()
+    if download:
+        max_retries = 5  # Set the maximum number of retries
+        retries = 0
+        while retries < max_retries:
+            status = lynk_ctx.live_status()
 
             if status.get('automationStatus') == "COMPLETED":
                 download_sbom(lynk_ctx)
                 break
             else:
-                print("Waiting for automation status to complete...")
                 time.sleep(5)
+                retries += 1
 
+        if retries == max_retries:                                                                                                                                                                 
+            print("Error: automationStatus could not be completed within the maximum retry limit.")
+            return 1
+        
     return 0
 
 
@@ -306,6 +311,7 @@ def setup_args():
     upload_parser.add_argument("--token",
                                required=False,
                                help="Security token")
+    upload_parser.add_argument("--download", action="store_true", help="Download SBOM after upload (default: False)")
 
     download_parser = subparsers.add_parser("download", help="Download SBOM")
     download_group = download_parser.add_mutually_exclusive_group(
@@ -390,7 +396,8 @@ def main() -> int:
     elif args.subcommand == "status":
         print_status(lynk_ctx, fmt_json)
     elif args.subcommand == "upload":
-        upload_sbom(lynk_ctx, args.sbom)
+        download_flag = getattr(args, 'download', False)
+        upload_sbom(lynk_ctx, args.sbom, download_flag)
     elif args.subcommand == "download":
         download_sbom(lynk_ctx)
     else:
