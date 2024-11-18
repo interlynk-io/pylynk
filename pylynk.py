@@ -225,15 +225,19 @@ def upload_sbom(lynk_ctx, sbom_file, download):
         The result of the upload operation.
     """
     upload_result = lynk_ctx.upload(sbom_file)
+
     if upload_result != 0:
         return 1
     
     if download:
-        max_retries = 5  # Set the maximum number of retries
+        max_retries = 5
         retries = 0
         while retries < max_retries:
-            status = lynk_ctx.live_status()
-
+            status = lynk_ctx.status()
+            if status is None:
+                print('Failed to fetch status for the version')
+                return 1
+            
             if status.get('automationStatus') == "COMPLETED":
                 download_sbom(lynk_ctx)
                 break
@@ -311,7 +315,8 @@ def setup_args():
     upload_parser.add_argument("--token",
                                required=False,
                                help="Security token")
-    upload_parser.add_argument("--download", action="store_true", help="Download SBOM after upload (default: False)")
+    upload_parser.add_argument("--download", action="store_true", 
+                               help="Download SBOM after upload (default: False)")
 
     download_parser = subparsers.add_parser("download", help="Download SBOM")
     download_group = download_parser.add_mutually_exclusive_group(

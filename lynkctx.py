@@ -227,6 +227,7 @@ class LynkContext:
 
     def resolve_ver(self):
         env = self.env or 'default'
+
         if not self.ver_id:
             for product in self.data.get('data', {}).get('organization', {}).get('productNodes', {}).get('products', []):
                 if product['id'] == self.prod_id:
@@ -237,6 +238,7 @@ class LynkContext:
                                     self.ver_id = ver['id']
                                     self.ver_status = self.vuln_status_to_status(
                                         ver['vulnRunStatus'])
+
         empty_ver = False
         if not self.ver:
             for product in self.data.get('data', {}).get('organization', {}).get('productNodes', {}).get('products', []):
@@ -245,11 +247,25 @@ class LynkContext:
                         if env['id'] == self.env_id:
                             for ver in env['versions']:
                                 if ver['id'] == self.ver_id:
-                                    self.ver = ver['primaryComponent']['version']
+                                    if ver.get('primaryComponent'):
+                                        self.ver = ver['primaryComponent']['version']
                                     if not self.ver:
                                         empty_ver = True
                                     self.ver_status = self.vuln_status_to_status(
                                         ver['vulnRunStatus'])
+                                    
+       
+        # if ver is not empty
+        if not empty_ver:
+            for product in self.data.get('data', {}).get('organization', {}).get('productNodes', {}).get('products', []):
+                if product['id'] == self.prod_id:
+                    for env in product['environments']:
+                        if env['id'] == self.env_id:
+                            for ver in env['versions']:
+                                if ver['id'] == self.ver_id:
+                                    if ver.get('primaryComponent'):
+                                        self.ver = ver['primaryComponent']['version']
+                                    self.ver_status = self.vuln_status_to_status(ver['vulnRunStatus'])
 
         return (empty_ver or self.ver) and self.ver_id
 
@@ -286,17 +302,13 @@ class LynkContext:
         return versions_node
 
     def status(self):
+        self.data = self._fetch_context()
         self.resolve_ver()
         return self.ver_status
-    
-    def live_status(self):
-        self.resolve_ver_status()
-        return self.ver_status
-
 
     def download(self):
         logging.debug("Downloading SBOM for environment ID %s, sbom ID %s",
-                    self.env_id, self.ver_id)
+                      self.env_id, self.ver_id)
 
         variables = {
             "envId": self.env_id,
@@ -310,10 +322,10 @@ class LynkContext:
         }
 
         response = requests.post(self.api_url,
-                                headers={
-                                    "Authorization": "Bearer " + self.token},
-                                json=request_data,
-                                timeout=INTERLYNK_API_TIMEOUT)
+                                 headers={
+                                     "Authorization": "Bearer " + self.token},
+                                 json=request_data,
+                                 timeout=INTERLYNK_API_TIMEOUT)
 
         if response.status_code == 200:
             try:
@@ -325,32 +337,19 @@ class LynkContext:
                     return None
 
                 sbom = data.get('data', {}).get('sbom', {})
-                if not sbom:
+                if sbom is None:
                     print('No SBOM matched with the given ID')
-                    logging.debug("Response data: %s", data)
+                    logging.debug(data)
                     return None
-
                 b64data = sbom.get('download')
-                if not b64data:
-                    print('SBOM data is not available for download.')
-                    logging.debug("SBOM details: %s", sbom)
-                    return None
-
-                try:
-                    decoded_content = base64.b64decode(b64data)
-                    logging.debug('Completed download and decoding')
-                    return decoded_content.decode('utf-8')
-                except (TypeError, ValueError) as e:
-                    logging.error("Error decoding SBOM content: %s", e)
-                    return None
-
+                decoded_content = base64.b64decode(b64data)
+                logging.debug('Completed download and decoding')
+                return decoded_content.decode('utf-8')
             except json.JSONDecodeError:
                 logging.error("Failed to parse JSON response.")
-                return None
         else:
             logging.error("Failed to send GraphQL request. Status code: %s",
-                        response.status_code)
-            return None
+                          response.status_code)
 
     def upload(self, sbom_file):
         if os.path.isfile(sbom_file) is False:
@@ -393,21 +392,18 @@ class LynkContext:
                 if response.status_code == 200:
                     resp_json = response.json()
                     version_id = resp_json.get('data', {}).get('sbomUpload', {}).get('id')
-
                     errors = resp_json.get('data', {}).get(
                         'sbomUpload', {}).get('errors')
-                    
                     if errors:
                         print(f"Error uploading sbom: {errors}")
                         return 1
-                    
                     if version_id:
                         self.ver_id = version_id
+                        print("SBOM ID successfully returned in the response: ", self.ver_id)
                         logging.debug("SBOM upload response: %s", response.text)
                     else:
                         print("Error: SBOM ID not returned in the response.")
-                        return 0
-                    
+                        return 1
                     print('Uploaded successfully')
                     logging.debug("SBOM Uploading response: %s", response.text)
                     return 0
@@ -444,60 +440,3 @@ class LynkContext:
             result_dict['labelingStatus'] = 'COMPLETED'
             result_dict['automationStatus'] = 'COMPLETED'
         return result_dict
-
-
-    def resolve_ver_status(self):
-        """
-        Resolve version ID (ver_id) and version (ver) for the current context.
-        """
-        self.data = self._fetch_context()
-
-        # ver_id is present
-        if self.ver_id:
-            self._update_ver_status()
-            return self.ver_id
-
-        # ver_id is not present
-        self._resolve_ver_id()
-
-        # ver is not present
-        if not self.ver:
-            self._resolve_ver_value()
-
-        return self.ver_id and self.ver
-
-    def _update_ver_status(self):
-        """Update the status of the version based on ver_id."""
-        for product in self.data.get('data', {}).get('organization', {}).get('productNodes', {}).get('products', []):
-            if product['id'] == self.prod_id:
-                for env in product['environments']:
-                    if env['id'] == self.env_id:
-                        for ver in env['versions']:
-                            if ver['id'] == self.ver_id:
-                                self.ver_status = self.vuln_status_to_status(ver['vulnRunStatus'])
-
-    def _resolve_ver_id(self):
-        """Resolve ver_id based on ver."""
-        for product in self.data.get('data', {}).get('organization', {}).get('productNodes', {}).get('products', []):
-            if product['id'] == self.prod_id:
-                for env in product['environments']:
-                    if env['id'] == self.env_id:
-                        for ver in env['versions']:
-                            if ver.get('primaryComponent') and ver['primaryComponent'].get('version') == self.ver:
-                                self.ver_id = ver['id']
-                                self.ver_status = self.vuln_status_to_status(ver['vulnRunStatus'])
-
-    def _resolve_ver_value(self):
-        """Resolve the version value (ver) based on ver_id."""
-        empty_ver = False
-        for product in self.data.get('data', {}).get('organization', {}).get('productNodes', {}).get('products', []):
-            if product['id'] == self.prod_id:
-                for env in product['environments']:
-                    if env['id'] == self.env_id:
-                        for ver in env['versions']:
-                            if ver['id'] == self.ver_id:
-                                if ver.get('primaryComponent'):
-                                    self.ver = ver['primaryComponent'].get('version')
-                                if not self.ver:
-                                    empty_ver = True
-        return empty_ver
