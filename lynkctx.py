@@ -399,7 +399,7 @@ class LynkContext:
                         return 1
                     if version_id:
                         self.ver_id = version_id
-                        print("SBOM ID successfully returned in the response: ", self.ver_id)
+                        logging.debug("SBOM ID successfully returned in the response: %s", self.ver_id)
                         logging.debug("SBOM upload response: %s", response.text)
                     else:
                         print("Error: SBOM ID not returned in the response.")

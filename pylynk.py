@@ -220,9 +220,11 @@ def upload_sbom(lynk_ctx, sbom_file, download):
     Args:
         lynk_ctx: The lynk context object.
         sbom_file: The path to the SBOM file.
+        download: download file after the automationStatus is completed
 
     Returns:
         The result of the upload operation.
+        If download is true, then along with upload operation it also performs download operation
     """
     upload_result = lynk_ctx.upload(sbom_file)
 
@@ -317,6 +319,8 @@ def setup_args():
                                help="Security token")
     upload_parser.add_argument("--download", action="store_true", 
                                help="Download SBOM after upload (default: False)")
+    upload_parser.add_argument(
+        "--output", help="Output file", required=False)
 
     download_parser = subparsers.add_parser("download", help="Download SBOM")
     download_group = download_parser.add_mutually_exclusive_group(
