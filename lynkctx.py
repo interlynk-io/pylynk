@@ -84,12 +84,31 @@ mutation uploadSbom($doc: Upload!, $projectId: ID!) {
 """
 
 QUERY_SBOM_DOWNLOAD = """
-query downloadSbom($envId: Uuid!, $sbomId: Uuid!, $includeVulns: Boolean) {
-  sbom(projectId: $envId, sbomId: $sbomId) {
+query downloadSbom(
+  $projectId: Uuid!, 
+  $sbomId: Uuid!, 
+  $includeVulns: Boolean, 
+  $spec: SbomSpec, 
+  $original: Boolean, 
+  $package: Boolean, 
+  $lite: Boolean, 
+  $excludeParts: Boolean
+) {
+  sbom(projectId: $projectId, sbomId: $sbomId) {
     download(
       sbomId: $sbomId
       includeVulns: $includeVulns
-    )
+      spec: $spec
+      original: $original
+      dontPackageSbom: $package
+      lite: $lite
+      excludeParts: $excludeParts
+    ) {
+      content
+      contentType
+      filename
+      __typename
+    }
     __typename
   }
 }
@@ -311,11 +330,16 @@ class LynkContext:
                       self.env_id, self.ver_id)
 
         variables = {
-            "envId": self.env_id,
+            "projectId": self.env_id,
             "sbomId": self.ver_id,
-            "includeVulns": False
+            "includeVulns": False,
+            "spec": "CycloneDX",
+            "original": False,
+            "package": False,
+            "lite": False,
+            "excludeParts": True
         }
-
+        logging.debug("Variables for request: %s", variables)
         request_data = {
             "query": QUERY_SBOM_DOWNLOAD,
             "variables": variables,
@@ -341,10 +365,14 @@ class LynkContext:
                     print('No SBOM matched with the given ID')
                     logging.debug(data)
                     return None
-                b64data = sbom.get('download')
-                decoded_content = base64.b64decode(b64data)
+                download_data = sbom.get('download', {})
+                b64data = download_data.get('content')
+                if not b64data:
+                    logging.error("No content found in the download response.")
+                    return None
+                decoded_content = base64.b64decode(b64data).decode('utf-8')
                 logging.debug('Completed download and decoding')
-                return decoded_content.decode('utf-8')
+                return decoded_content
             except json.JSONDecodeError:
                 logging.error("Failed to parse JSON response.")
         else:
@@ -392,6 +420,7 @@ class LynkContext:
                 if response.status_code == 200:
                     resp_json = response.json()
                     version_id = resp_json.get('data', {}).get('sbomUpload', {}).get('id')
+                    logging.debug("version_id or sbom_id: %s", version_id)
                     errors = resp_json.get('data', {}).get(
                         'sbomUpload', {}).get('errors')
                     if errors:
@@ -407,6 +436,7 @@ class LynkContext:
                     print('Uploaded successfully')
                     logging.debug("SBOM Uploading response: %s", response.text)
                     return 0
+                print("Error uploading sbom")
                 logging.error("Error uploading sbom: %d", response.status_code)
         except requests.exceptions.RequestException as ex:
             logging.error("RequestException: %s", ex)
