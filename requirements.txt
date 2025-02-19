@@ -1,8 +1,8 @@
-certifi==2024.7.4
-charset-normalizer==3.3.2
-idna==3.7
-pytz==2024.1
-requests==2.32.0
-tzlocal==5.2
-urllib3==1.26.19
+certifi==2025.1.31
+charset-normalizer==3.4.1
+idna==3.10
+pytz==2025.1
+requests==2.32.3
+tzlocal==5.3
+urllib3==2.3.0
 
