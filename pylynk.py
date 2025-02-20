@@ -213,18 +213,45 @@ def download_sbom(lynk_ctx):
     return 0
 
 
-def upload_sbom(lynk_ctx, sbom_file):
+def upload_sbom(lynk_ctx, sbom_file, download):
     """
     Upload SBOM to the lynk_ctx.
 
     Args:
         lynk_ctx: The lynk context object.
         sbom_file: The path to the SBOM file.
+        download: download file after the automationStatus is completed
 
     Returns:
         The result of the upload operation.
+        If download is true, then along with upload operation it also performs download operation
     """
-    return lynk_ctx.upload(sbom_file)
+    upload_result = lynk_ctx.upload(sbom_file)
+
+    if upload_result != 0:
+        return 1
+    
+    if download:
+        max_retries = 5
+        retries = 0
+        while retries < max_retries:
+            status = lynk_ctx.status()
+            if status is None:
+                print('Failed to fetch status for the version')
+                return 1
+            
+            if status.get('automationStatus') == "COMPLETED":
+                download_sbom(lynk_ctx)
+                break
+            else:
+                time.sleep(5)
+                retries += 1
+
+        if retries == max_retries:                                                                                                                                                                 
+            print("Error: automationStatus could not be completed within the maximum retry limit.")
+            return 1
+        
+    return 0
 
 
 def add_output_format_group(parser):
@@ -290,6 +317,10 @@ def setup_args():
     upload_parser.add_argument("--token",
                                required=False,
                                help="Security token")
+    upload_parser.add_argument("--download", action="store_true", 
+                               help="Download SBOM after upload (default: False)")
+    upload_parser.add_argument(
+        "--output", help="Output file", required=False)
 
     download_parser = subparsers.add_parser("download", help="Download SBOM")
     download_group = download_parser.add_mutually_exclusive_group(
@@ -374,7 +405,8 @@ def main() -> int:
     elif args.subcommand == "status":
         print_status(lynk_ctx, fmt_json)
     elif args.subcommand == "upload":
-        upload_sbom(lynk_ctx, args.sbom)
+        download_flag = getattr(args, 'download', False)
+        upload_sbom(lynk_ctx, args.sbom, download_flag)
     elif args.subcommand == "download":
         download_sbom(lynk_ctx)
     else:
