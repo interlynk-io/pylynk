@@ -88,8 +88,11 @@ query downloadSbom($envId: Uuid!, $sbomId: Uuid!, $includeVulns: Boolean) {
     download(
       sbomId: $sbomId
       includeVulns: $includeVulns
-    )
-    __typename
+    ){
+      content
+      contentType
+      filename
+    }
   }
 }
 """
@@ -318,12 +321,13 @@ class LynkContext:
                         logging.error(error["message"])
                     return None
 
-                sbom = data.get('data', {}).get('sbom', {})
+                sbom = data.get('data', {}).get('sbom', {}).get('download', {})
+
                 if sbom is None:
                     print('No SBOM matched with the given ID')
                     logging.debug(data)
                     return None
-                b64data = sbom.get('download')
+                b64data = sbom.get('content')
                 decoded_content = base64.b64decode(b64data)
                 logging.debug('Completed download and decoding')
                 return decoded_content.decode('utf-8')
