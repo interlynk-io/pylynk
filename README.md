@@ -152,6 +152,17 @@ OR
 docker run -e INTERLYNK_SECURITY_TOKEN  ghcr.io/interlynk-io/pylynk download --prod 'sbomex' --env 'default' --vers 'sha256:5ed7e95ae79fe3fe6c4b8660f6f9e31154e64eca76ae42963a679fbb198c3951'
 ```
 
+### Download SBOM for specific version by version ID with Vulns
+Run the following command to upload an SBOM:
+```bash
+python3 pylynk.py download --prod 'sbomex' --verId 'fbcc24ad-5911-4229-8943-acf863c07bb4' --vuln true
+```
+OR 
+```bash
+docker run -e INTERLYNK_SECURITY_TOKEN  ghcr.io/interlynk-io/pylynk download --prod 'sbomex' --verId 'fbcc24ad-5911-4229-8943-acf863c07bb4' --vuln true
+```
+
+
 ## Upload SBOM
 ### Upload SBOM to the default environment
 Upload SBOM file sbomqs.cdx.json to the product named **sbomqs**
