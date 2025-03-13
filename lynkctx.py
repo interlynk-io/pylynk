@@ -298,7 +298,7 @@ class LynkContext:
         variables = {
             "envId": self.env_id,
             "sbomId": self.ver_id,
-            "includeVulns": False
+            "includeVulns": True
         }
 
         request_data = {
