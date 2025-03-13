@@ -99,7 +99,7 @@ query downloadSbom($envId: Uuid!, $sbomId: Uuid!, $includeVulns: Boolean) {
 
 
 class LynkContext:
-    def __init__(self, api_url, token, prod_id, prod, env_id, env, ver_id, ver, output_file):
+    def __init__(self, api_url, token, prod_id, prod, env_id, env, ver_id, ver, output_file, vuln):
         self.api_url = api_url or INTERLYNK_API_URL
         self.token = token
         self.prod_id = prod_id
@@ -110,6 +110,7 @@ class LynkContext:
         self.ver = ver
         self.ver_status = self.vuln_status_to_status('')
         self.output_file = output_file
+        self.vuln = vuln
 
     def validate(self):
         if not self.token:
@@ -144,6 +145,13 @@ class LynkContext:
             self.ver = self.ver_id = None
             print('Version not found')
             return False
+        
+        # Optional: Validate the vuln flag if provided.
+        if self.vuln is not None:
+            valid_values = ['true', 'false', '1', '0', 'yes', 'no']
+            if str(self.vuln).lower() not in valid_values:
+                print(f"Invalid value for vuln: {self.vuln}. Expected one of {valid_values}")
+                return False
 
         return True
 
@@ -295,10 +303,19 @@ class LynkContext:
         logging.debug("Downloading SBOM for environment ID %s, sbom ID %s",
                       self.env_id, self.ver_id)
 
+        if self.vuln is not None:
+            vuln_str = str(self.vuln).lower()
+            if vuln_str in ['true', '1', 'yes']:
+                include_vulns = True
+            else:
+                include_vulns = False
+        else:
+            include_vulns = False
+
         variables = {
             "envId": self.env_id,
             "sbomId": self.ver_id,
-            "includeVulns": True
+            "includeVulns": include_vulns
         }
 
         request_data = {

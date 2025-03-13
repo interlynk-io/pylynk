@@ -309,6 +309,8 @@ def setup_args():
 
     download_parser.add_argument(
         "--output", help="Output file", required=False)
+    
+    download_parser.add_argument("--vuln", help="Vulnerabilities", required=False)
 
     args = parser.parse_args()
     return args
@@ -349,7 +351,8 @@ def setup_lynk_context(args):
         getattr(args, 'env', None),
         getattr(args, 'verId', None),
         getattr(args, 'ver', None),
-        getattr(args, 'output', None)
+        getattr(args, 'output', None),
+        getattr(args, "vuln", None),
     )
 
 
