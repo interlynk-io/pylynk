@@ -4,5 +4,5 @@ idna==3.10
 pytz==2025.1
 requests==2.32.3
 tzlocal==5.3
-urllib3==2.3.0
+urllib3==2.5.0
 
