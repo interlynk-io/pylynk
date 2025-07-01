@@ -1,19 +1,37 @@
-# Use a minimal Python Alpine base image
-FROM python:3.13.2-alpine
+# Multi-stage build for smaller image
+# Build stage
+FROM python:3.13.2-alpine AS builder
 
-# Set the working directory inside the container
 WORKDIR /app
 
-# Install git, clone latest release, and remove git
-RUN apk add --no-cache git \
-    && git clone https://github.com/interlynk-io/pylynk /app \
-    && cd /app \
-    && git checkout $(git describe --tags `git rev-list --tags --max-count=1`) \
-    && apk del git
+# Install build dependencies
+RUN apk add --no-cache gcc musl-dev
 
-# Install Python dependencies in a virtual environment
-RUN python3 -m venv /venv \
-    && /venv/bin/pip install --no-cache-dir -r /app/requirements.txt
+# Copy requirements and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
 
-# Use the virtual environment's Python binary as the entrypoint
-ENTRYPOINT ["/venv/bin/python", "/app/pylynk.py"]
+# Runtime stage
+FROM python:3.13.2-alpine
+
+# Create non-root user
+RUN adduser -D -h /app pylynk
+
+WORKDIR /app
+
+# Copy installed packages from builder
+COPY --from=builder /root/.local /home/pylynk/.local
+
+# Copy application code
+COPY --chown=pylynk:pylynk pylynk.py .
+COPY --chown=pylynk:pylynk pylynk/ ./pylynk/
+
+# Switch to non-root user
+USER pylynk
+
+# Set Python path to find user-installed packages
+ENV PYTHONPATH=/home/pylynk/.local/lib/python3.13/site-packages
+ENV PATH=/home/pylynk/.local/bin:$PATH
+
+# Set the entrypoint
+ENTRYPOINT ["python", "pylynk.py"]
