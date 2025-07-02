@@ -21,27 +21,27 @@ from pylynk.formatters.table_formatter import format_status_table
 def execute(api_client, config):
     """
     Execute the status command.
-    
+
     Args:
         api_client: Initialized API client
         config: Configuration object
-        
+
     Returns:
         int: Exit code (0 for success, 1 for error)
     """
     if not api_client.resolve_identifiers():
         return 1
-    
+
     # Get status based on version's vulnerability status
     status = api_client.get_status(getattr(config, 'ver_status', ''))
-    
+
     if not status:
         print('Failed to fetch status for the version')
         return 1
-    
+
     if config.format_json:
         format_json(status)
     else:
         format_status_table(status)
-    
+
     return 0

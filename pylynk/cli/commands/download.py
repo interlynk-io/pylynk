@@ -23,17 +23,17 @@ from pylynk.constants import CONTENT_TYPE_JSON, CONTENT_TYPE_CSV, CONTENT_TYPE_X
 def execute(api_client, config):
     """
     Execute the download command.
-    
+
     Args:
         api_client: Initialized API client
         config: Configuration object
-        
+
     Returns:
         int: Exit code (0 for success, 1 for error)
     """
     # Parse boolean flag for vulnerabilities
     include_vulns = parse_boolean_flag(config.vuln)
-    
+
     # Call download with all parameters
     content, content_type, filename = api_client.download_sbom(
         env_id=config.env_id,
@@ -51,14 +51,14 @@ def execute(api_client, config):
         include_support_status=config.include_support_status,
         support_level_only=getattr(config, 'support_level_only', False)
     )
-    
+
     if content is None:
         print('Failed to fetch SBOM')
         return 1
-    
+
     # Determine output filename
     output_file = config.output_file or filename
-    
+
     # Handle different content types
     if content_type == CONTENT_TYPE_JSON and not config.original:
         # Parse and format JSON
@@ -86,5 +86,5 @@ def execute(api_client, config):
                 f.write(content)
         else:
             print(content)
-    
+
     return 0

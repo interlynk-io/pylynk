@@ -21,7 +21,7 @@ import sys
 def format_json(data, output_file=None):
     """
     Format data as JSON and output to file or stdout.
-    
+
     Args:
         data: Data to format as JSON
         output_file (str): Optional output file path

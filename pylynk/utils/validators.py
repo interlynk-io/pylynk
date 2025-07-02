@@ -21,10 +21,10 @@ from pylynk.constants import VALID_BOOLEAN_VALUES
 def validate_file_exists(file_path):
     """
     Validate that a file exists.
-    
+
     Args:
         file_path (str): Path to the file
-        
+
     Returns:
         bool: True if file exists, False otherwise
     """
@@ -37,19 +37,20 @@ def validate_file_exists(file_path):
 def validate_boolean_flag(value, flag_name):
     """
     Validate a boolean flag value.
-    
+
     Args:
         value: Value to validate
         flag_name (str): Name of the flag for error messages
-        
+
     Returns:
         bool: True if valid, False otherwise
     """
     if value is None:
         return True
-    
+
     if str(value).lower() not in VALID_BOOLEAN_VALUES:
-        print(f"Invalid value for {flag_name}: {value}. Expected one of {VALID_BOOLEAN_VALUES}")
+        print(
+            f"Invalid value for {flag_name}: {value}. Expected one of {VALID_BOOLEAN_VALUES}")
         return False
     return True
 
@@ -57,15 +58,15 @@ def validate_boolean_flag(value, flag_name):
 def parse_boolean_flag(value):
     """
     Parse a boolean flag value.
-    
+
     Args:
         value: Value to parse
-        
+
     Returns:
         bool: Parsed boolean value
     """
     if value is None:
         return False
-    
+
     value_str = str(value).lower()
     return value_str in ['true', '1', 'yes']

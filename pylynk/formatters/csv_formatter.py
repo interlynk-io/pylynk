@@ -18,7 +18,7 @@
 def format_csv(content, output_file=None):
     """
     Format and output CSV content.
-    
+
     Args:
         content (str): CSV content to output
         output_file (str): Optional output file path

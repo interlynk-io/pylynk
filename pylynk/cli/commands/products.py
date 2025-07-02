@@ -21,23 +21,23 @@ from pylynk.formatters.table_formatter import format_products_table
 def execute(api_client, config):
     """
     Execute the products command.
-    
+
     Args:
         api_client: Initialized API client
         config: Configuration object
-        
+
     Returns:
         int: Exit code (0 for success, 1 for error)
     """
     products = api_client.get_products()
-    
+
     if not products:
         print("No products found")
         return 1
-    
+
     if config.format_json:
         format_json(products)
     else:
         format_products_table(products)
-    
+
     return 0

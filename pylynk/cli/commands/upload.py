@@ -18,12 +18,12 @@
 def execute(api_client, config, sbom_file):
     """
     Execute the upload command.
-    
+
     Args:
         api_client: Initialized API client
         config: Configuration object
         sbom_file (str): Path to SBOM file to upload
-        
+
     Returns:
         int: Exit code (0 for success, 1 for error)
     """
@@ -31,6 +31,6 @@ def execute(api_client, config, sbom_file):
     if not config.prod:
         print("Error: Product name (--prod) is required")
         return 1
-    
+
     # Upload will use whatever identifiers are available
     return api_client.upload_sbom(sbom_file)
