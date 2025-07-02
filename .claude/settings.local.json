@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(true)",
+      "Bash(mkdir:*)",
+      "Bash(touch:*)",
+      "Bash(rm:*)",
+      "Bash(python3:*)",
+      "Bash(pip3 install:*)",
+      "Bash(source:*)",
+      "Bash(docker build:*)",
+      "Bash(docker run:*)",
+      "Bash(python:*)"
+    ],
+    "deny": []
+  }
+}
