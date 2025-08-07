@@ -307,6 +307,204 @@ docker run -e INTERLYNK_SECURITY_TOKEN=$INTERLYNK_SECURITY_TOKEN -v $(pwd):/app/
 
 **Note:** Retries are not attempted for authentication errors (401) or client errors (4xx) except rate limiting (429).
 
+## CI/CD Integration
+
+PyLynk automatically detects and captures CI/CD environment information when running in GitHub Actions, Bitbucket Pipelines, or other CI environments. This metadata is sent with API requests during **upload operations only** to provide context about the build and deployment pipeline.
+
+### Automatic PR and Build Information Extraction
+
+When running in a CI environment during SBOM uploads, PyLynk automatically extracts:
+- **Pull Request Information**: PR number, URL, source/target branches, **author** (when in PR context)
+- **Build Information**: Build ID, number, URL, commit SHA
+- **Repository Information**: Repository name, owner, URL
+
+This information is included as HTTP headers in upload API requests to provide traceability between SBOMs and their source code changes.
+
+**Note:** CI/CD metadata is only captured and sent during the `upload` command. Other commands (list products, list versions, download, status) do not include this metadata.
+
+### GitHub Actions Integration
+
+In GitHub Actions, PyLynk automatically detects the environment and extracts relevant information:
+
+```yaml
+name: Upload SBOM
+on:
+  pull_request:
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+jobs:
+  upload-sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Generate SBOM
+        run: |
+          # Your SBOM generation command here
+          
+      - name: Upload SBOM to Interlynk
+        env:
+          INTERLYNK_SECURITY_TOKEN: ${{ secrets.INTERLYNK_TOKEN }}
+        run: |
+          python3 pylynk.py upload --prod 'my-product' --sbom sbom.json
+          # PyLynk automatically captures:
+          # - PR number and branches (for pull_request events)
+          # - PR author (GITHUB_ACTOR)
+          # - Commit SHA and build URL
+          # - Repository information
+```
+
+### Bitbucket Pipelines Integration
+
+In Bitbucket Pipelines, PyLynk automatically detects and extracts pipeline information:
+
+```yaml
+pipelines:
+  pull-requests:
+    '**':
+      - step:
+          name: Upload SBOM
+          script:
+            - pip install -r requirements.txt
+            - python3 pylynk.py upload --prod 'my-product' --sbom sbom.json
+          # PyLynk automatically captures:
+          # - PR ID and branches
+          # - PR author (BITBUCKET_STEP_TRIGGERER_UUID)
+          # - Build number and URL
+          # - Repository information
+```
+
+### Generic CI Support
+
+PyLynk also supports generic CI environments by checking common environment variables. When `CI=true` is set, PyLynk will attempt to extract build and PR information from standard environment variables:
+
+#### Environment Variables for Generic CI
+
+| Variable | Description | Maps to Header |
+|----------|-------------|----------------|
+| `CI` | Set to `true` to indicate CI environment | Enables CI detection |
+| **Pull Request Variables** | | |
+| `PULL_REQUEST_NUMBER` | PR number | `X-PR-Number` |
+| `PR_NUMBER` | Alternative PR number variable | `X-PR-Number` |
+| `CHANGE_ID` | Alternative PR/change identifier | `X-PR-Number` |
+| `BRANCH_NAME` | Current branch name | `X-PR-Source-Branch` |
+| `GIT_BRANCH` | Alternative branch name variable | `X-PR-Source-Branch` |
+| `PR_SOURCE_BRANCH` | Alternative source branch variable | `X-PR-Source-Branch` |
+| `PR_TARGET_BRANCH` | PR target/base branch | `X-PR-Target-Branch` |
+| `BASE_BRANCH` | Alternative target branch variable | `X-PR-Target-Branch` |
+| `TARGET_BRANCH` | Alternative target branch variable | `X-PR-Target-Branch` |
+| `PR_URL` | Full URL to the pull request | `X-PR-URL` |
+| `PR_AUTHOR` | PR author username | `X-PR-Author` |
+| `PULL_REQUEST_AUTHOR` | Alternative PR author variable | `X-PR-Author` |
+| `PR_USER` | Alternative PR author variable | `X-PR-Author` |
+| `CHANGE_AUTHOR` | Alternative PR/change author variable | `X-PR-Author` |
+| `CI_COMMIT_AUTHOR` | GitLab CI commit author | `X-PR-Author` |
+| **Build Variables** | | |
+| `BUILD_URL` | Full URL to the build/pipeline | `X-Build-URL` |
+| **Commit Variables** | | |
+| `GIT_COMMIT` | Git commit SHA | `X-Commit-SHA` |
+| `COMMIT_SHA` | Alternative commit SHA variable | `X-Commit-SHA` |
+| `SHA` | Short form commit SHA variable | `X-Commit-SHA` |
+| **Repository Variables** | | |
+| `REPO_URL` | Full URL to the repository | `X-Repository-URL` |
+
+Generic CI environments now support the same metadata as GitHub Actions and Bitbucket Pipelines when the corresponding environment variables are provided.
+
+#### Example Usage
+
+```bash
+# Jenkins, CircleCI, Travis CI, or any other CI system
+export CI=true
+
+# Pull Request information
+export PULL_REQUEST_NUMBER=123
+export BRANCH_NAME=feature/new-feature
+export PR_TARGET_BRANCH=main
+export PR_URL=https://github.com/myorg/myrepo/pull/123
+export PR_AUTHOR=john-doe  # PR author username
+
+# Build information
+export BUILD_URL=https://jenkins.example.com/job/myproject/123/
+export GIT_COMMIT=abc123def456789
+
+# Repository information
+export REPO_URL=https://github.com/myorg/myrepo
+
+python3 pylynk.py upload --prod 'my-product' --sbom sbom.json
+```
+
+These variables are checked as fallbacks when PyLynk doesn't detect a specific CI provider (GitHub Actions or Bitbucket Pipelines). The tool will use whichever variables are available in your CI environment. You only need to set the variables that are available in your specific CI system.
+
+### Viewing Extracted CI Information
+
+Use the `--verbose` flag to see what CI/CD information was extracted:
+
+```bash
+python3 pylynk.py upload --prod 'my-product' --sbom sbom.json --verbose
+
+# Output includes:
+# DEBUG - CI/CD Environment Information Extraction
+# DEBUG - CI Provider: github_actions
+# DEBUG - PR Information:
+# DEBUG -   number: 123
+# DEBUG -   url: https://github.com/org/repo/pull/123
+# DEBUG -   source_branch: feature/new-feature
+# DEBUG -   target_branch: main
+# DEBUG -   author: john-doe
+# DEBUG - Build Information:
+# DEBUG -   build_id: 456789
+# DEBUG -   build_url: https://github.com/org/repo/actions/runs/456789
+# DEBUG -   commit_sha: abc123def456
+```
+
+### Controlling CI Metadata Collection
+
+By default, PyLynk automatically includes CI metadata when running in CI environments during upload operations. You can control this behavior using the `PYLYNK_INCLUDE_CI_METADATA` environment variable:
+
+```bash
+# Disable CI metadata collection
+export PYLYNK_INCLUDE_CI_METADATA=false
+
+# Force enable CI metadata collection (even outside CI)
+export PYLYNK_INCLUDE_CI_METADATA=true
+
+# Auto-detect (default - enabled only in CI environments)
+export PYLYNK_INCLUDE_CI_METADATA=auto
+```
+
+**When CI metadata is included:**
+- `auto` (default): Automatically enabled when these conditions are met:
+  - Running in a CI environment (detected via environment variables like `CI=true`, `GITHUB_ACTIONS=true`, or `BITBUCKET_BUILD_NUMBER`)
+  - AND executing the `upload` command
+- `true`: Force enabled for all upload operations regardless of CI environment
+- `false`: Never included, even in CI environments
+
+### CI Metadata Headers
+
+The extracted CI information is sent as HTTP headers with upload API requests:
+
+| Header | Description | Example |
+|--------|-------------|---------|
+| `X-CI-Provider` | CI platform name | `github_actions`, `bitbucket_pipelines`, `generic_ci` |
+| `X-PR-Number` | Pull request number | `123` |
+| `X-PR-URL` | Pull request URL | `https://github.com/org/repo/pull/123` |
+| `X-PR-Source-Branch` | PR source branch | `feature/new-feature` |
+| `X-PR-Target-Branch` | PR target branch | `main` |
+| `X-PR-Author` | PR author username | `john-doe` |
+| `X-Build-URL` | Build URL | `https://github.com/org/repo/actions/runs/456789` |
+| `X-Commit-SHA` | Git commit SHA | `abc123def456` |
+| `X-Repository-URL` | Repository URL | `https://github.com/org/repo` |
+
+This metadata helps track:
+- Which code changes triggered SBOM generation
+- Build provenance and traceability
+- Automated vs manual SBOM uploads
+- CI/CD pipeline performance and reliability
+
+**Important:** These headers are only sent during `upload` operations when CI metadata collection is enabled.
+
 ###  Increasing the verbosity of output
 Use `--verbose` or `-v` with any command to see debug output. You can increase verbosity by using multiple `-v` flags:
 - `-v` - Basic debug output

@@ -16,7 +16,8 @@
 
 import os
 import logging
-from pylynk.constants import DEFAULT_API_URL, ENV_API_URL, ENV_SECURITY_TOKEN
+from pylynk.constants import DEFAULT_API_URL, ENV_API_URL, ENV_SECURITY_TOKEN, ENV_INCLUDE_CI_METADATA
+from pylynk.utils.ci_info import CIInfo
 
 
 class Config:
@@ -59,6 +60,10 @@ class Config:
         # Upload options
         self.retries = getattr(args, 'retries', 3)
 
+        # CI/CD metadata - only for upload command
+        self.subcommand = getattr(args, 'subcommand', None)
+        self._extract_ci_info(args)
+
         # Logging
         self.setup_logging(args)
 
@@ -77,6 +82,39 @@ class Config:
             )
             # Suppress urllib3 connection pool debug messages
             logging.getLogger('urllib3.connectionpool').setLevel(logging.INFO)
+
+    def _extract_ci_info(self, args):
+        """Extract CI/CD environment information if enabled and for upload command only."""
+        # Only extract CI info for upload command
+        if self.subcommand != 'upload':
+            self.ci_info = None
+            logging.debug("CI metadata extraction skipped - only available for upload command")
+            return
+        
+        # Check if CI metadata inclusion is enabled (default: True in CI environments)
+        include_ci_metadata = os.environ.get(ENV_INCLUDE_CI_METADATA, 'auto').lower()
+        
+        # Auto-detect: include if we're in a CI environment
+        if include_ci_metadata == 'auto':
+            # Check if we're in any CI environment
+            is_ci = (
+                os.environ.get('CI') == 'true' or
+                os.environ.get('GITHUB_ACTIONS') == 'true' or
+                os.environ.get('BITBUCKET_BUILD_NUMBER') is not None
+            )
+            include_ci_metadata = is_ci
+        else:
+            include_ci_metadata = include_ci_metadata in ['true', '1', 'yes']
+        
+        if include_ci_metadata:
+            try:
+                self.ci_info = CIInfo()
+            except Exception as e:
+                logging.debug(f"Failed to extract CI information: {e}")
+                self.ci_info = None
+        else:
+            self.ci_info = None
+            logging.debug("CI metadata extraction disabled")
 
     def validate_token(self):
         """Validate that security token is present."""
