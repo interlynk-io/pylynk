@@ -99,6 +99,62 @@ class LynkAPIClient:
 
         return True
 
+    def _get_headers(self):
+        """
+        Get headers for API requests including CI metadata if available.
+
+        Returns:
+            dict: Headers dictionary
+        """
+        headers = {"Authorization": f"Bearer {self.config.token}"}
+        
+        # Add CI metadata to headers if available
+        if hasattr(self.config, 'ci_info') and self.config.ci_info:
+            ci_metadata = self.config.ci_info.get_metadata()
+            if ci_metadata:
+                # Add as custom headers
+                headers['X-CI-Provider'] = ci_metadata.get('ci_provider', 'unknown')
+                
+                # Add PR information if available
+                if 'pr' in ci_metadata:
+                    pr_info = ci_metadata['pr']
+                    if 'number' in pr_info:
+                        headers['X-PR-Number'] = str(pr_info['number'])
+                    if 'url' in pr_info:
+                        headers['X-PR-URL'] = pr_info['url']
+                    if 'source_branch' in pr_info:
+                        headers['X-PR-Source-Branch'] = pr_info['source_branch']
+                    if 'target_branch' in pr_info:
+                        headers['X-PR-Target-Branch'] = pr_info['target_branch']
+                    if 'author' in pr_info:
+                        headers['X-PR-Author'] = pr_info['author']
+                
+                # Add build information if available
+                if 'build' in ci_metadata:
+                    build_info = ci_metadata['build']
+                    if 'build_url' in build_info:
+                        headers['X-Build-URL'] = build_info['build_url']
+                    if 'commit_sha' in build_info:
+                        headers['X-Commit-SHA'] = build_info['commit_sha']
+                
+                # Add repository information if available
+                if 'repository' in ci_metadata:
+                    repo_info = ci_metadata['repository']
+                    if 'url' in repo_info:
+                        headers['X-Repository-URL'] = repo_info['url']
+                
+                # Log CI metadata in debug mode
+                pr_context = self.config.ci_info.get_pr_context_string()
+                if pr_context:
+                    logging.debug(f"CI Context: {pr_context}")
+                
+                # Log the headers being sent (excluding auth token for security)
+                logged_headers = {k: v for k, v in headers.items() if k != 'Authorization'}
+                if logged_headers:
+                    logging.debug(f"CI Headers: {logged_headers}")
+        
+        return headers
+    
     def _make_request(self, query, variables=None, operation_name=None):
         """
         Make a GraphQL request to the API.
@@ -111,7 +167,7 @@ class LynkAPIClient:
         Returns:
             dict: Response data or None if error
         """
-        headers = {"Authorization": f"Bearer {self.config.token}"}
+        headers = self._get_headers()
 
         request_data = {"query": query}
         if variables:
@@ -408,7 +464,7 @@ class LynkAPIClient:
                       sbom_file,
                       self._format_size(file_size))
 
-        headers = {"Authorization": f"Bearer {self.config.token}"}
+        headers = self._get_headers()
 
         operations = json.dumps({
             "query": SBOM_UPLOAD,
