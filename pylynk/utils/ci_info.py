@@ -141,10 +141,32 @@ class CIInfo:
 
     def _log_extracted_info(self):
         logger.debug("=" * 60)
+        logger.debug("CI/CD Environment Information Extraction")
+        logger.debug("=" * 60)
+        
         logger.debug(f"CI Provider: {self.ci_provider or 'Not detected'}")
-        logger.debug(f"Event Info: {self.event_info or 'None'}")
-        logger.debug(f"Build Info: {self.build_info or 'None'}")
-        logger.debug(f"Repository Info: {self.repository_info or 'None'}")
+        
+        if self.event_info:
+            logger.debug("Event Information:")
+            for key, value in sorted(self.event_info.items()):
+                logger.debug(f"  {key}: {value}")
+        else:
+            logger.debug("Event Information: None")
+        
+        if self.build_info:
+            logger.debug("Build Information:")
+            for key, value in sorted(self.build_info.items()):
+                logger.debug(f"  {key}: {value}")
+        else:
+            logger.debug("Build Information: None")
+            
+        if self.repository_info:
+            logger.debug("Repository Information:")
+            for key, value in sorted(self.repository_info.items()):
+                logger.debug(f"  {key}: {value}")
+        else:
+            logger.debug("Repository Information: None")
+        
         logger.debug("=" * 60)
 
     def get_metadata(self):
