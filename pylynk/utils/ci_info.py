@@ -34,11 +34,14 @@ class CIInfo:
         if self.ci_provider == 'github_actions':
             event_name = os.getenv('GITHUB_EVENT_NAME', '')
             event_info['event_type'] = event_name
+            logger.debug(f"Detected GitHub Actions event: {event_name}")
 
             event_path = os.getenv('GITHUB_EVENT_PATH')
+            logger.debug(f"GitHub Actions event path: {event_path}")
             if event_name.startswith('pull_request') and event_path and os.path.exists(event_path):
                 with open(event_path, 'r') as f:
                     event_data = json.load(f)
+                logger.debug(f"GitHub Actions event data: {event_data}")
                 pr = event_data['pull_request']
                 event_info.update({
                     'number': pr['number'],
@@ -48,7 +51,9 @@ class CIInfo:
                     'author': pr['user']['login']
                 })
             elif event_name == 'push':
+                logger.debug(f"Detected GitHub Actions push event")
                 ref = os.getenv('GITHUB_REF', '')
+                logger.debug(f"GitHub Actions push event ref: {ref}")
                 if ref.startswith('refs/tags/'):
                     # Tag push - treat as release
                     event_info['event_type'] = 'release'
@@ -56,14 +61,15 @@ class CIInfo:
                 elif ref.startswith('refs/heads/'):
                     event_info['source_branch'] = ref.split('/', 2)[-1]
                 event_info['author'] = os.getenv('GITHUB_ACTOR')
-                
                 # Check if push event has PR information in the event JSON
                 if event_path and os.path.exists(event_path):
+                    logger.debug(f"GitHub Actions push event path: {event_path}")
                     try:
                         with open(event_path, 'r') as f:
                             event_data = json.load(f)
                         # GitHub includes PR info in push events when the branch has an associated PR
                         # Check for pull request information in various possible locations
+                        logger.debug(f"GitHub Actions push event data: {event_data}")
                         if 'pull_request' in event_data:
                             pr = event_data['pull_request']
                             event_info.update({
