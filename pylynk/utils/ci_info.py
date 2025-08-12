@@ -56,6 +56,36 @@ class CIInfo:
                 elif ref.startswith('refs/heads/'):
                     event_info['source_branch'] = ref.split('/', 2)[-1]
                 event_info['author'] = os.getenv('GITHUB_ACTOR')
+                
+                # Check if push event has PR information in the event JSON
+                if event_path and os.path.exists(event_path):
+                    try:
+                        with open(event_path, 'r') as f:
+                            event_data = json.load(f)
+                        # GitHub includes PR info in push events when the branch has an associated PR
+                        # Check for pull request information in various possible locations
+                        if 'pull_request' in event_data:
+                            pr = event_data['pull_request']
+                            event_info.update({
+                                'pr_number': pr['number'],
+                                'pr_url': pr['html_url'],
+                                'pr_target_branch': pr['base']['ref'],
+                                'pr_author': pr['user']['login']
+                            })
+                        # Alternative: check if this push triggered PR workflows
+                        elif 'repository' in event_data and 'pull_requests' in event_data.get('repository', {}):
+                            # Some push events include associated PRs
+                            prs = event_data['repository'].get('pull_requests', [])
+                            if prs and len(prs) > 0:
+                                pr = prs[0]  # Take the first associated PR
+                                event_info.update({
+                                    'pr_number': pr.get('number'),
+                                    'pr_url': pr.get('html_url'),
+                                    'pr_target_branch': pr.get('base', {}).get('ref'),
+                                    'pr_author': pr.get('user', {}).get('login')
+                                })
+                    except (json.JSONDecodeError, KeyError) as e:
+                        logger.debug(f"Could not extract PR info from push event: {e}")
             elif event_name == 'release' and event_path and os.path.exists(event_path):
                 # This code might be incorrect, not sure if a release_event is ever fired
                 with open(event_path, 'r') as f:
@@ -69,7 +99,15 @@ class CIInfo:
 
         elif self.ci_provider == 'bitbucket_pipelines':
             # Event type detection
-            if os.getenv("BITBUCKET_PR_ID"):
+            # Check for tag first (highest priority)
+            if os.getenv("BITBUCKET_TAG"):
+                event_info['event_type'] = "release"
+                event_info.update({
+                    'release_tag': os.getenv('BITBUCKET_TAG'),
+                    'author': os.getenv('BITBUCKET_STEP_TRIGGERER_UUID')
+                })
+            # Check if this is a direct PR event (PR source branch not set)
+            elif os.getenv("BITBUCKET_PR_ID") and not os.getenv("BITBUCKET_BRANCH"):
                 event_info['event_type'] = "pull_request"
                 event_info.update({
                     'number': os.getenv('BITBUCKET_PR_ID'),
@@ -78,19 +116,22 @@ class CIInfo:
                     'target_branch': os.getenv('BITBUCKET_PR_DESTINATION_BRANCH'),
                     'author': os.getenv('BITBUCKET_STEP_TRIGGERER_UUID')
                 })
-                # Optional: API fetch for richer PR details could go here
-            elif os.getenv("BITBUCKET_TAG"):
-                event_info['event_type'] = "release"
-                event_info.update({
-                    'release_tag': os.getenv('BITBUCKET_TAG'),
-                    'author': os.getenv('BITBUCKET_STEP_TRIGGERER_UUID')
-                })
+            # Otherwise it's a push (may or may not have associated PR)
             elif os.getenv("BITBUCKET_BRANCH"):
                 event_info['event_type'] = "push"
                 event_info.update({
                     'source_branch': os.getenv('BITBUCKET_BRANCH'),
                     'author': os.getenv('BITBUCKET_STEP_TRIGGERER_UUID')
                 })
+                # Check if this push is associated with a PR
+                # In Bitbucket, PR environment variables are available even in push events
+                if os.getenv("BITBUCKET_PR_ID"):
+                    event_info.update({
+                        'pr_number': os.getenv('BITBUCKET_PR_ID'),
+                        'pr_url': f"https://bitbucket.org/{os.getenv('BITBUCKET_WORKSPACE')}/{os.getenv('BITBUCKET_REPO_SLUG')}/pull-requests/{os.getenv('BITBUCKET_PR_ID')}",
+                        'pr_target_branch': os.getenv('BITBUCKET_PR_DESTINATION_BRANCH'),
+                        'pr_author': os.getenv('BITBUCKET_STEP_TRIGGERER_UUID')
+                    })
             else:
                 event_info['event_type'] = "unknown"
 
@@ -183,14 +224,28 @@ class CIInfo:
             return None
         etype = self.event_info.get('event_type', 'unknown')
         parts = [etype]
-        if etype == "pull_request" and self.event_info.get('number'):
-            parts.append(f"PR #{self.event_info['number']}")
-        if self.event_info.get('source_branch') and self.event_info.get('target_branch'):
-            parts.append(f"{self.event_info['source_branch']} → {self.event_info['target_branch']}")
+        
+        # Handle PR information (can be present in both pull_request and push events)
+        pr_number = self.event_info.get('number') or self.event_info.get('pr_number')
+        if pr_number:
+            parts.append(f"PR #{pr_number}")
+        
+        # Handle branch information
+        target_branch = self.event_info.get('target_branch') or self.event_info.get('pr_target_branch')
+        if self.event_info.get('source_branch') and target_branch:
+            parts.append(f"{self.event_info['source_branch']} → {target_branch}")
         elif self.event_info.get('source_branch'):
             parts.append(f"branch: {self.event_info['source_branch']}")
+            # Add PR target if available but source wasn't
+            if target_branch:
+                parts.append(f"→ {target_branch}")
+        
         if self.event_info.get('release_tag'):
             parts.append(f"tag: {self.event_info['release_tag']}")
-        if self.event_info.get('author'):
-            parts.append(f"by {self.event_info['author']}")
+        
+        # Handle author information
+        author = self.event_info.get('author') or self.event_info.get('pr_author')
+        if author:
+            parts.append(f"by {author}")
+        
         return " ".join(parts)
