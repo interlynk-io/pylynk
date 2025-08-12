@@ -49,10 +49,15 @@ class CIInfo:
                 })
             elif event_name == 'push':
                 ref = os.getenv('GITHUB_REF', '')
-                if ref.startswith('refs/heads/'):
+                if ref.startswith('refs/tags/'):
+                    # Tag push - treat as release
+                    event_info['event_type'] = 'release'
+                    event_info['release_tag'] = ref.split('/', 2)[-1]
+                elif ref.startswith('refs/heads/'):
                     event_info['source_branch'] = ref.split('/', 2)[-1]
                 event_info['author'] = os.getenv('GITHUB_ACTOR')
             elif event_name == 'release' and event_path and os.path.exists(event_path):
+                # This code might be incorrect, not sure if a release_event is ever fired
                 with open(event_path, 'r') as f:
                     event_data = json.load(f)
                 release_data = event_data.get('release', {})
@@ -159,14 +164,7 @@ class CIInfo:
                 logger.debug(f"  {key}: {value}")
         else:
             logger.debug("Build Information: None")
-            
-        if self.repository_info:
-            logger.debug("Repository Information:")
-            for key, value in sorted(self.repository_info.items()):
-                logger.debug(f"  {key}: {value}")
-        else:
-            logger.debug("Repository Information: None")
-        
+        logger.debug(f"Repository Info: {self.repository_info or 'None'}")
         logger.debug("=" * 60)
 
     def get_metadata(self):
