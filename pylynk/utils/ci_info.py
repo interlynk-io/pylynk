@@ -120,14 +120,14 @@ class CIInfo:
                     'url': f"https://bitbucket.org/{os.getenv('BITBUCKET_WORKSPACE')}/{os.getenv('BITBUCKET_REPO_SLUG')}/pull-requests/{os.getenv('BITBUCKET_PR_ID')}",
                     'source_branch': os.getenv('BITBUCKET_BRANCH'),
                     'target_branch': os.getenv('BITBUCKET_PR_DESTINATION_BRANCH'),
-                    'author': os.getenv('BITBUCKET_STEP_TRIGGERER_UUID').strip('{}') if os.getenv('BITBUCKET_STEP_TRIGGERER_UUID') else None
+                    'author': os.getenv('BITBUCKET_STEP_TRIGGERER_UUID')
                 })
             # Otherwise it's a push (without associated PR)
             elif os.getenv("BITBUCKET_BRANCH"):
                 event_info['event_type'] = "push"
                 event_info.update({
                     'source_branch': os.getenv('BITBUCKET_BRANCH'),
-                    'author': os.getenv('BITBUCKET_STEP_TRIGGERER_UUID').strip('{}') if os.getenv('BITBUCKET_STEP_TRIGGERER_UUID') else None
+                    'author': os.getenv('BITBUCKET_STEP_TRIGGERER_UUID')
                 })
             else:
                 event_info['event_type'] = "unknown"
