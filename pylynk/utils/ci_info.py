@@ -120,14 +120,14 @@ class CIInfo:
                     'url': f"https://bitbucket.org/{os.getenv('BITBUCKET_WORKSPACE')}/{os.getenv('BITBUCKET_REPO_SLUG')}/pull-requests/{os.getenv('BITBUCKET_PR_ID')}",
                     'source_branch': os.getenv('BITBUCKET_BRANCH'),
                     'target_branch': os.getenv('BITBUCKET_PR_DESTINATION_BRANCH'),
-                    'author': os.getenv('BITBUCKET_STEP_TRIGGERER_UUID')
+                    'author': os.getenv('BITBUCKET_STEP_TRIGGERER_UUID').strip('{}') if os.getenv('BITBUCKET_STEP_TRIGGERER_UUID') else None
                 })
             # Otherwise it's a push (may or may not have associated PR)
             elif os.getenv("BITBUCKET_BRANCH"):
                 event_info['event_type'] = "push"
                 event_info.update({
                     'source_branch': os.getenv('BITBUCKET_BRANCH'),
-                    'author': os.getenv('BITBUCKET_STEP_TRIGGERER_UUID')
+                    'author': os.getenv('BITBUCKET_STEP_TRIGGERER_UUID').strip('{}') if os.getenv('BITBUCKET_STEP_TRIGGERER_UUID') else None
                 })
                 # Check if this push is associated with a PR
                 # In Bitbucket, PR environment variables are available even in push events
@@ -136,7 +136,7 @@ class CIInfo:
                         'pr_number': os.getenv('BITBUCKET_PR_ID'),
                         'pr_url': f"https://bitbucket.org/{os.getenv('BITBUCKET_WORKSPACE')}/{os.getenv('BITBUCKET_REPO_SLUG')}/pull-requests/{os.getenv('BITBUCKET_PR_ID')}",
                         'pr_target_branch': os.getenv('BITBUCKET_PR_DESTINATION_BRANCH'),
-                        'pr_author': os.getenv('BITBUCKET_STEP_TRIGGERER_UUID')
+                        'pr_author': os.getenv('BITBUCKET_STEP_TRIGGERER_UUID').strip('{}') if os.getenv('BITBUCKET_STEP_TRIGGERER_UUID') else None
                     })
             else:
                 event_info['event_type'] = "unknown"
