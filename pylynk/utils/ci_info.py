@@ -112,8 +112,8 @@ class CIInfo:
                     'release_tag': os.getenv('BITBUCKET_TAG'),
                     'author': os.getenv('BITBUCKET_STEP_TRIGGERER_UUID')
                 })
-            # Check if this is a direct PR event (PR source branch not set)
-            elif os.getenv("BITBUCKET_PR_ID") and not os.getenv("BITBUCKET_BRANCH"):
+            # Check if this is a PR event (PR ID is present)
+            elif os.getenv("BITBUCKET_PR_ID"):
                 event_info['event_type'] = "pull_request"
                 event_info.update({
                     'number': os.getenv('BITBUCKET_PR_ID'),
@@ -122,22 +122,13 @@ class CIInfo:
                     'target_branch': os.getenv('BITBUCKET_PR_DESTINATION_BRANCH'),
                     'author': os.getenv('BITBUCKET_STEP_TRIGGERER_UUID').strip('{}') if os.getenv('BITBUCKET_STEP_TRIGGERER_UUID') else None
                 })
-            # Otherwise it's a push (may or may not have associated PR)
+            # Otherwise it's a push (without associated PR)
             elif os.getenv("BITBUCKET_BRANCH"):
                 event_info['event_type'] = "push"
                 event_info.update({
                     'source_branch': os.getenv('BITBUCKET_BRANCH'),
                     'author': os.getenv('BITBUCKET_STEP_TRIGGERER_UUID').strip('{}') if os.getenv('BITBUCKET_STEP_TRIGGERER_UUID') else None
                 })
-                # Check if this push is associated with a PR
-                # In Bitbucket, PR environment variables are available even in push events
-                if os.getenv("BITBUCKET_PR_ID"):
-                    event_info.update({
-                        'pr_number': os.getenv('BITBUCKET_PR_ID'),
-                        'pr_url': f"https://bitbucket.org/{os.getenv('BITBUCKET_WORKSPACE')}/{os.getenv('BITBUCKET_REPO_SLUG')}/pull-requests/{os.getenv('BITBUCKET_PR_ID')}",
-                        'pr_target_branch': os.getenv('BITBUCKET_PR_DESTINATION_BRANCH'),
-                        'pr_author': os.getenv('BITBUCKET_STEP_TRIGGERER_UUID').strip('{}') if os.getenv('BITBUCKET_STEP_TRIGGERER_UUID') else None
-                    })
             else:
                 event_info['event_type'] = "unknown"
 
