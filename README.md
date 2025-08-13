@@ -314,6 +314,7 @@ PyLynk automatically detects and captures CI/CD environment information when run
 ### Automatic PR and Build Information Extraction
 
 When running in a CI environment during SBOM uploads, PyLynk automatically extracts:
+- **Event Information**: Event type (pull_request, push, release), release tag (when applicable)
 - **Pull Request Information**: PR number, URL, source/target branches, **author** (when in PR context)
 - **Build Information**: Build ID, number, URL, commit SHA
 - **Repository Information**: Repository name, owner, URL
@@ -333,6 +334,8 @@ on:
     branches: [ main ]
   push:
     branches: [ main ]
+  release:
+    types: [ published ]
 
 jobs:
   upload-sbom:
@@ -350,6 +353,8 @@ jobs:
         run: |
           python3 pylynk.py upload --prod 'my-product' --sbom sbom.json
           # PyLynk automatically captures:
+          # - Event type (pull_request, push, or release)
+          # - Release tag (for release events)
           # - PR number and branches (for pull_request events)
           # - PR author (GITHUB_ACTOR)
           # - Commit SHA and build URL
@@ -369,8 +374,17 @@ pipelines:
           script:
             - pip install -r requirements.txt
             - python3 pylynk.py upload --prod 'my-product' --sbom sbom.json
+  tags:
+    'v*':
+      - step:
+          name: Upload SBOM for Release
+          script:
+            - pip install -r requirements.txt
+            - python3 pylynk.py upload --prod 'my-product' --sbom sbom.json
           # PyLynk automatically captures:
-          # - PR ID and branches
+          # - Event type (pull_request, push, or release)
+          # - Release tag (for tag-triggered builds)
+          # - PR ID and branches (for PR events)
           # - PR author (BITBUCKET_STEP_TRIGGERER_UUID)
           # - Build number and URL
           # - Repository information
@@ -385,6 +399,10 @@ PyLynk also supports generic CI environments by checking common environment vari
 | Variable | Description | Maps to Header |
 |----------|-------------|----------------|
 | `CI` | Set to `true` to indicate CI environment | Enables CI detection |
+| **Release Variables** | | |
+| `GIT_TAG` | Git tag for release builds | `X-Release-Tag` |
+| `CI_COMMIT_TAG` | GitLab CI tag variable | `X-Release-Tag` |
+| `TAG_NAME` | Alternative tag name variable | `X-Release-Tag` |
 | **Pull Request Variables** | | |
 | `PULL_REQUEST_NUMBER` | PR number | `X-PR-Number` |
 | `PR_NUMBER` | Alternative PR number variable | `X-PR-Number` |
@@ -488,6 +506,8 @@ The extracted CI information is sent as HTTP headers with upload API requests:
 | Header | Description | Example |
 |--------|-------------|---------|
 | `X-CI-Provider` | CI platform name | `github_actions`, `bitbucket_pipelines`, `generic_ci` |
+| `X-Event-Type` | CI event type | `pull_request`, `push`, `release` |
+| `X-Release-Tag` | Release tag name (when event is release) | `v1.2.3` |
 | `X-PR-Number` | Pull request number | `123` |
 | `X-PR-URL` | Pull request URL | `https://github.com/org/repo/pull/123` |
 | `X-PR-Source-Branch` | PR source branch | `feature/new-feature` |

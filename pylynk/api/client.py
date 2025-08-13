@@ -115,19 +115,29 @@ class LynkAPIClient:
                 # Add as custom headers
                 headers['X-CI-Provider'] = ci_metadata.get('ci_provider', 'unknown')
                 
-                # Add PR information if available
-                if 'pr' in ci_metadata:
-                    pr_info = ci_metadata['pr']
-                    if 'number' in pr_info:
-                        headers['X-PR-Number'] = str(pr_info['number'])
-                    if 'url' in pr_info:
-                        headers['X-PR-URL'] = pr_info['url']
-                    if 'source_branch' in pr_info:
-                        headers['X-PR-Source-Branch'] = pr_info['source_branch']
-                    if 'target_branch' in pr_info:
-                        headers['X-PR-Target-Branch'] = pr_info['target_branch']
-                    if 'author' in pr_info:
-                        headers['X-PR-Author'] = pr_info['author']
+                # Add event information if available
+                if 'event' in ci_metadata:
+                    event_info = ci_metadata['event']
+                    
+                    # Add event type
+                    if 'event_type' in event_info:
+                        headers['X-Event-Type'] = event_info['event_type']
+                    
+                    # Add release tag if available
+                    if 'release_tag' in event_info:
+                        headers['X-Release-Tag'] = event_info['release_tag']
+                    
+                    # Add PR information if available
+                    if 'number' in event_info:
+                        headers['X-PR-Number'] = str(event_info['number'])
+                    if 'url' in event_info:
+                        headers['X-PR-URL'] = event_info['url']
+                    if 'source_branch' in event_info:
+                        headers['X-PR-Source-Branch'] = event_info['source_branch']
+                    if 'target_branch' in event_info:
+                        headers['X-PR-Target-Branch'] = event_info['target_branch']
+                    if 'author' in event_info:
+                        headers['X-PR-Author'] = event_info['author']
                 
                 # Add build information if available
                 if 'build' in ci_metadata:
@@ -144,14 +154,17 @@ class LynkAPIClient:
                         headers['X-Repository-URL'] = repo_info['url']
                 
                 # Log CI metadata in debug mode
-                pr_context = self.config.ci_info.get_pr_context_string()
-                if pr_context:
-                    logging.debug(f"CI Context: {pr_context}")
+                event_context = self.config.ci_info.get_event_context_string()
+                if event_context:
+                    logging.debug(f"CI Context: {event_context}")
                 
                 # Log the headers being sent (excluding auth token for security)
                 logged_headers = {k: v for k, v in headers.items() if k != 'Authorization'}
                 if logged_headers:
-                    logging.debug(f"CI Headers: {logged_headers}")
+                    logging.debug("CI/CD Headers being sent:")
+                    for header_name, header_value in sorted(logged_headers.items()):
+                        if header_name.startswith('X-'):
+                            logging.debug(f"  {header_name}: {header_value}")
         
         return headers
     
@@ -465,6 +478,11 @@ class LynkAPIClient:
                       self._format_size(file_size))
 
         headers = self._get_headers()
+        
+        # Log summary of CI headers if present
+        ci_headers = {k: v for k, v in headers.items() if k.startswith('X-') and k != 'Authorization'}
+        if ci_headers:
+            logging.debug(f"Including {len(ci_headers)} CI/CD metadata headers in upload request")
 
         operations = json.dumps({
             "query": SBOM_UPLOAD,
