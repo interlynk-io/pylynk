@@ -376,11 +376,14 @@ class LynkAPIClient:
         if env_id:
             variables["projectId"] = env_id
         if prod_name:
-            variables["projectGroupName"] = prod_name
+            # Trim the product name before sending to API
+            variables["projectGroupName"] = prod_name.strip()
         if env_name:
-            variables["projectName"] = env_name
+            # Lowercase and trim the environment name before sending to API
+            variables["projectName"] = env_name.strip().lower()
         if ver_name:
-            variables["versionName"] = ver_name
+            # Lowercase and trim the version name before sending to API
+            variables["versionName"] = ver_name.strip().lower()
 
         # Add optional parameters
         if include_vulns:
@@ -463,13 +466,15 @@ class LynkAPIClient:
         if hasattr(self.config, 'prod_id') and self.config.prod_id:
             variables["projectGroupId"] = self.config.prod_id
         elif self.config.prod:
-            variables["projectGroupName"] = self.config.prod
+            # Trim the product name before sending to API
+            variables["projectGroupName"] = self.config.prod.strip()
 
         # Add project (environment) identifiers
         if self.config.env_id:
             variables["projectId"] = self.config.env_id
         elif self.config.env:
-            variables["projectName"] = self.config.env
+            # Lowercase and trim the environment name before sending to API
+            variables["projectName"] = self.config.env.strip().lower()
 
         logging.debug("Upload Request: operation=uploadSbom, url=%s, variables=%s, file=%s, size=%s",
                       self.config.api_url,
