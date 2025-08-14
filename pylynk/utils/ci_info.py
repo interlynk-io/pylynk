@@ -23,7 +23,7 @@ class CIInfo:
             return 'github_actions'
         if os.getenv('BITBUCKET_BUILD_NUMBER'):
             return 'bitbucket_pipelines'
-        if os.getenv('TF_BUILD') == 'True' or os.getenv('SYSTEM_TEAMFOUNDATIONCOLLECTIONURI'):
+        if os.getenv('TF_BUILD', '').lower() in ['true', '1'] or os.getenv('SYSTEM_TEAMFOUNDATIONCOLLECTIONURI'):
             return 'azure_devops'
         if os.getenv('CI'):
             return 'generic_ci'
