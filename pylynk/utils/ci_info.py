@@ -214,7 +214,7 @@ class CIInfo:
             if org_url and project and build_id:
                 # Remove trailing slash from org_url if present
                 org_url = org_url.rstrip('/')
-                build_url = f"{org_url}/{project}/_build/results?buildId={build_id}"
+                build_url = f"{org_url}/{urllib.parse.quote(project)}/_build/results?buildId={build_id}"
             
             build_info.update({
                 'build_id': build_id,
