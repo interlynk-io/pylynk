@@ -126,7 +126,7 @@ class CIInfo:
                 if org_url and project and repo and pr_id:
                     # Remove trailing slash from org_url if present
                     org_url = org_url.rstrip('/')
-                    pr_url = f"{org_url}/{project}/_git/{repo}/pullrequest/{pr_id}"
+                    pr_url = f"{org_url}/{project}/_git/{urllib.parse.quote(repo)}/pullrequest/{pr_id}"
                 
                 event_info.update({
                     'number': pr_id,
