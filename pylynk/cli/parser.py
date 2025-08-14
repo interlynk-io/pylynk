@@ -131,4 +131,7 @@ def create_parser():
         "--include-support-status", help="Include support status", action="store_true", required=False)
     add_common_arguments(download_parser)
 
+    # Version command
+    version_parser = subparsers.add_parser("version", help="Show version information")
+    
     return parser
