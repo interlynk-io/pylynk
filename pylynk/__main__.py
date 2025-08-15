@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pylynk.cli.parser import create_parser
 from pylynk.utils.config import Config
 from pylynk.api.client import LynkAPIClient
-from pylynk.cli.commands import products, versions, status, upload, download
+from pylynk.cli.commands import products, versions, status, upload, download, version
 
 
 def main():
@@ -37,6 +37,11 @@ def main():
     
     # Create API client
     api_client = LynkAPIClient(config)
+    
+    # Version command doesn't need API initialization
+    if args.subcommand == "version":
+        from pylynk.cli.commands import version
+        return version.execute(None, None)
     
     # Determine if we need full initialization
     needs_full_init = True
@@ -80,7 +85,7 @@ def main():
         exit_code = download.execute(api_client, config)
     else:
         print("Missing or invalid command. "
-              "Supported commands: {prods, vers, status, upload, download}")
+              "Supported commands: {prods, vers, status, upload, download, version}")
         exit_code = 1
     
     return exit_code

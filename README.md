@@ -309,7 +309,7 @@ docker run -e INTERLYNK_SECURITY_TOKEN=$INTERLYNK_SECURITY_TOKEN -v $(pwd):/app/
 
 ## CI/CD Integration
 
-PyLynk automatically detects and captures CI/CD environment information when running in GitHub Actions, Bitbucket Pipelines, or other CI environments. This metadata is sent with API requests during **upload operations only** to provide context about the build and deployment pipeline.
+PyLynk automatically detects and captures CI/CD environment information when running in GitHub Actions, Bitbucket Pipelines, Azure DevOps, or other CI environments. This metadata is sent with API requests during **upload operations only** to provide context about the build and deployment pipeline.
 
 ### Automatic PR and Build Information Extraction
 
@@ -388,6 +388,49 @@ pipelines:
           # - PR author (BITBUCKET_STEP_TRIGGERER_UUID)
           # - Build number and URL
           # - Repository information
+```
+
+### Azure DevOps Integration
+
+In Azure DevOps Pipelines, PyLynk automatically detects and extracts pipeline information:
+
+```yaml
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+  tags:
+    include:
+      - v*
+
+pr:
+  branches:
+    include:
+      - main
+
+steps:
+  - script: |
+      pip install -r requirements.txt
+    displayName: 'Install dependencies'
+    
+  - script: |
+      # Generate SBOM here
+    displayName: 'Generate SBOM'
+    
+  - script: |
+      python3 pylynk.py upload --prod 'my-product' --sbom sbom.json
+    displayName: 'Upload SBOM to Interlynk'
+    env:
+      INTERLYNK_SECURITY_TOKEN: $(INTERLYNK_TOKEN)
+    # PyLynk automatically captures:
+    # - Event type (pull_request, push, or release)
+    # - Release tag (for tag-triggered builds)
+    # - PR ID and URL (for PR events)
+    # - PR source/target branches
+    # - PR author (BUILD_REQUESTEDFOR)
+    # - Build ID, number, and URL
+    # - Repository information
 ```
 
 ### Generic CI Support
@@ -505,7 +548,7 @@ The extracted CI information is sent as HTTP headers with upload API requests:
 
 | Header | Description | Example |
 |--------|-------------|---------|
-| `X-CI-Provider` | CI platform name | `github_actions`, `bitbucket_pipelines`, `generic_ci` |
+| `X-CI-Provider` | CI platform name | `github_actions`, `bitbucket_pipelines`, `azure_devops`, `generic_ci` |
 | `X-Event-Type` | CI event type | `pull_request`, `push`, `release` |
 | `X-Release-Tag` | Release tag name (when event is release) | `v1.2.3` |
 | `X-PR-Number` | Pull request number | `123` |
