@@ -19,12 +19,12 @@ class CIInfo:
             self._log_extracted_info()
 
     def _detect_ci_provider(self):
+        if os.getenv('CI'):
+            return 'generic_ci'
         if os.getenv('GITHUB_ACTIONS') == 'true':
             return 'github_actions'
         if os.getenv('BITBUCKET_BUILD_NUMBER'):
             return 'bitbucket_pipelines'
-        if os.getenv('CI'):
-            return 'generic_ci'
         return None
 
     def _extract_event_info(self):
@@ -186,16 +186,16 @@ class CIInfo:
         logger.debug("=" * 60)
         logger.debug("CI/CD Environment Information Extraction")
         logger.debug("=" * 60)
-        
+
         logger.debug(f"CI Provider: {self.ci_provider or 'Not detected'}")
-        
+
         if self.event_info:
             logger.debug("Event Information:")
             for key, value in sorted(self.event_info.items()):
                 logger.debug(f"  {key}: {value}")
         else:
             logger.debug("Event Information: None")
-        
+
         if self.build_info:
             logger.debug("Build Information:")
             for key, value in sorted(self.build_info.items()):
@@ -221,12 +221,12 @@ class CIInfo:
             return None
         etype = self.event_info.get('event_type', 'unknown')
         parts = [etype]
-        
+
         # Handle PR information (can be present in both pull_request and push events)
         pr_number = self.event_info.get('number') or self.event_info.get('pr_number')
         if pr_number:
             parts.append(f"PR #{pr_number}")
-        
+
         # Handle branch information
         target_branch = self.event_info.get('target_branch') or self.event_info.get('pr_target_branch')
         if self.event_info.get('source_branch') and target_branch:
@@ -236,13 +236,13 @@ class CIInfo:
             # Add PR target if available but source wasn't
             if target_branch:
                 parts.append(f"→ {target_branch}")
-        
+
         if self.event_info.get('release_tag'):
             parts.append(f"tag: {self.event_info['release_tag']}")
-        
+
         # Handle author information
         author = self.event_info.get('author') or self.event_info.get('pr_author')
         if author:
             parts.append(f"by {author}")
-        
+
         return " ".join(parts)
