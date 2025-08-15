@@ -3,6 +3,7 @@
 import os
 import json
 import logging
+import urllib.parse
 
 logger = logging.getLogger(__name__)
 
@@ -19,14 +20,14 @@ class CIInfo:
             self._log_extracted_info()
 
     def _detect_ci_provider(self):
+        if os.getenv('CI'):
+            return 'generic_ci'
         if os.getenv('GITHUB_ACTIONS') == 'true':
             return 'github_actions'
         if os.getenv('BITBUCKET_BUILD_NUMBER'):
             return 'bitbucket_pipelines'
         if os.getenv('TF_BUILD', '').lower() in ['true', '1'] or os.getenv('SYSTEM_TEAMFOUNDATIONCOLLECTIONURI'):
             return 'azure_devops'
-        if os.getenv('CI'):
-            return 'generic_ci'
         return None
 
     def _extract_event_info(self):
@@ -184,15 +185,47 @@ class CIInfo:
                 event_info['event_type'] = "unknown"
 
         else:
-            # Generic CI fallback
-            if os.getenv('PULL_REQUEST_NUMBER') or os.getenv('PR_NUMBER'):
+            # Generic CI fallback - support common CI environment variables
+            # Detect event type
+            event_type = os.getenv('EVENT_TYPE')
+            pr_number = os.getenv('PULL_REQUEST_NUMBER') or os.getenv('PR_NUMBER')
+            git_tag = os.getenv('GIT_TAG') or os.getenv('REPO_TAG')
+            
+            if event_type:
+                event_info['event_type'] = event_type
+            elif pr_number:
                 event_info['event_type'] = "pull_request"
-                event_info['number'] = os.getenv('PULL_REQUEST_NUMBER') or os.getenv('PR_NUMBER')
-            elif os.getenv('GIT_TAG'):
+            elif git_tag:
                 event_info['event_type'] = "release"
-                event_info['release_tag'] = os.getenv('GIT_TAG')
             else:
                 event_info['event_type'] = "push"
+            
+            # Extract PR information
+            if pr_number:
+                event_info['number'] = pr_number
+            
+            # PR URL
+            pr_url = os.getenv('PR_URL')
+            if pr_url:
+                event_info['url'] = pr_url
+            
+            # Branch information
+            source_branch = os.getenv('BRANCH_NAME') or os.getenv('REPO_BRANCH')
+            if source_branch:
+                event_info['source_branch'] = source_branch
+            
+            target_branch = os.getenv('PR_TARGET_BRANCH')
+            if target_branch:
+                event_info['target_branch'] = target_branch
+            
+            # Author information
+            author = os.getenv('PR_AUTHOR')
+            if author:
+                event_info['author'] = author
+            
+            # Release/tag information
+            if git_tag:
+                event_info['release_tag'] = git_tag
 
         return {k: v for k, v in event_info.items() if v}
 
@@ -228,9 +261,14 @@ class CIInfo:
                 'commit_sha': os.getenv('BITBUCKET_COMMIT'),
                 'build_url': f"https://bitbucket.org/{os.getenv('BITBUCKET_WORKSPACE')}/{os.getenv('BITBUCKET_REPO_SLUG')}/pipelines/results/{os.getenv('BITBUCKET_BUILD_NUMBER')}"
             })
-        # Fallbacks
-        build_info.setdefault('commit_sha', os.getenv('GIT_COMMIT') or os.getenv('COMMIT_SHA') or os.getenv('SHA'))
+        # Fallbacks - check multiple common environment variable names
+        build_info.setdefault('commit_sha', 
+            os.getenv('GIT_COMMIT') or 
+            os.getenv('REPO_COMMIT') or 
+            os.getenv('COMMIT_SHA') or 
+            os.getenv('SHA'))
         build_info.setdefault('build_id', os.getenv('BUILD_ID') or os.getenv('CI_BUILD_ID'))
+        build_info.setdefault('build_number', os.getenv('BUILD_NUMBER'))
         build_info.setdefault('build_url', os.getenv('BUILD_URL'))
         return {k: v for k, v in build_info.items() if v}
 
@@ -260,23 +298,25 @@ class CIInfo:
                 'owner': os.getenv('BITBUCKET_WORKSPACE'),
                 'url': f"https://bitbucket.org/{os.getenv('BITBUCKET_WORKSPACE')}/{os.getenv('BITBUCKET_REPO_SLUG')}"
             })
-        repo_info.setdefault('url', os.getenv('REPO_URL'))
+        # Fallbacks - check common repository environment variables
+        repo_info.setdefault('url', os.getenv('REPO_URL') or os.getenv('REPOSITORY_URL'))
+        repo_info.setdefault('name', os.getenv('REPO_NAME') or os.getenv('REPOSITORY_NAME'))
         return {k: v for k, v in repo_info.items() if v}
 
     def _log_extracted_info(self):
         logger.debug("=" * 60)
         logger.debug("CI/CD Environment Information Extraction")
         logger.debug("=" * 60)
-        
+
         logger.debug(f"CI Provider: {self.ci_provider or 'Not detected'}")
-        
+
         if self.event_info:
             logger.debug("Event Information:")
             for key, value in sorted(self.event_info.items()):
                 logger.debug(f"  {key}: {value}")
         else:
             logger.debug("Event Information: None")
-        
+
         if self.build_info:
             logger.debug("Build Information:")
             for key, value in sorted(self.build_info.items()):
@@ -302,12 +342,12 @@ class CIInfo:
             return None
         etype = self.event_info.get('event_type', 'unknown')
         parts = [etype]
-        
+
         # Handle PR information (can be present in both pull_request and push events)
         pr_number = self.event_info.get('number') or self.event_info.get('pr_number')
         if pr_number:
             parts.append(f"PR #{pr_number}")
-        
+
         # Handle branch information
         target_branch = self.event_info.get('target_branch') or self.event_info.get('pr_target_branch')
         if self.event_info.get('source_branch') and target_branch:
@@ -317,13 +357,13 @@ class CIInfo:
             # Add PR target if available but source wasn't
             if target_branch:
                 parts.append(f"→ {target_branch}")
-        
+
         if self.event_info.get('release_tag'):
             parts.append(f"tag: {self.event_info['release_tag']}")
-        
+
         # Handle author information
         author = self.event_info.get('author') or self.event_info.get('pr_author')
         if author:
             parts.append(f"by {author}")
-        
+
         return " ".join(parts)

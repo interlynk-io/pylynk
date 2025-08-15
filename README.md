@@ -442,42 +442,57 @@ PyLynk also supports generic CI environments by checking common environment vari
 | Variable | Description | Maps to Header |
 |----------|-------------|----------------|
 | `CI` | Set to `true` to indicate CI environment | Enables CI detection |
+| **Event Type Variables** | | |
+| `EVENT_TYPE` | Event type (pull_request, push, release) | `X-Event-Type` |
 | **Release Variables** | | |
 | `GIT_TAG` | Git tag for release builds | `X-Release-Tag` |
+| `REPO_TAG` | Alternative tag variable | `X-Release-Tag` |
 | `CI_COMMIT_TAG` | GitLab CI tag variable | `X-Release-Tag` |
 | `TAG_NAME` | Alternative tag name variable | `X-Release-Tag` |
 | **Pull Request Variables** | | |
 | `PULL_REQUEST_NUMBER` | PR number | `X-PR-Number` |
 | `PR_NUMBER` | Alternative PR number variable | `X-PR-Number` |
 | `CHANGE_ID` | Alternative PR/change identifier | `X-PR-Number` |
-| `BRANCH_NAME` | Current branch name | `X-PR-Source-Branch` |
-| `GIT_BRANCH` | Alternative branch name variable | `X-PR-Source-Branch` |
-| `PR_SOURCE_BRANCH` | Alternative source branch variable | `X-PR-Source-Branch` |
-| `PR_TARGET_BRANCH` | PR target/base branch | `X-PR-Target-Branch` |
-| `BASE_BRANCH` | Alternative target branch variable | `X-PR-Target-Branch` |
-| `TARGET_BRANCH` | Alternative target branch variable | `X-PR-Target-Branch` |
 | `PR_URL` | Full URL to the pull request | `X-PR-URL` |
 | `PR_AUTHOR` | PR author username | `X-PR-Author` |
 | `PULL_REQUEST_AUTHOR` | Alternative PR author variable | `X-PR-Author` |
 | `PR_USER` | Alternative PR author variable | `X-PR-Author` |
 | `CHANGE_AUTHOR` | Alternative PR/change author variable | `X-PR-Author` |
 | `CI_COMMIT_AUTHOR` | GitLab CI commit author | `X-PR-Author` |
+| **Branch Variables** | | |
+| `BRANCH_NAME` | Current branch name | `X-PR-Source-Branch` |
+| `REPO_BRANCH` | Alternative branch name variable | `X-PR-Source-Branch` |
+| `GIT_BRANCH` | Alternative branch name variable | `X-PR-Source-Branch` |
+| `PR_SOURCE_BRANCH` | Alternative source branch variable | `X-PR-Source-Branch` |
+| `PR_TARGET_BRANCH` | PR target/base branch | `X-PR-Target-Branch` |
+| `BASE_BRANCH` | Alternative target branch variable | `X-PR-Target-Branch` |
+| `TARGET_BRANCH` | Alternative target branch variable | `X-PR-Target-Branch` |
 | **Build Variables** | | |
+| `BUILD_ID` | Build identifier | Used internally |
+| `CI_BUILD_ID` | Alternative build ID variable | Used internally |
+| `BUILD_NUMBER` | Build number | Used internally |
 | `BUILD_URL` | Full URL to the build/pipeline | `X-Build-URL` |
 | **Commit Variables** | | |
 | `GIT_COMMIT` | Git commit SHA | `X-Commit-SHA` |
+| `REPO_COMMIT` | Alternative commit SHA variable | `X-Commit-SHA` |
 | `COMMIT_SHA` | Alternative commit SHA variable | `X-Commit-SHA` |
 | `SHA` | Short form commit SHA variable | `X-Commit-SHA` |
 | **Repository Variables** | | |
 | `REPO_URL` | Full URL to the repository | `X-Repository-URL` |
+| `REPOSITORY_URL` | Alternative repository URL variable | `X-Repository-URL` |
+| `REPO_NAME` | Repository name | Used internally |
+| `REPOSITORY_NAME` | Alternative repository name variable | Used internally |
 
 Generic CI environments now support the same metadata as GitHub Actions and Bitbucket Pipelines when the corresponding environment variables are provided.
 
 #### Example Usage
 
 ```bash
-# Jenkins, CircleCI, Travis CI, or any other CI system
+# Jenkins, CircleCI, Travis CI, Bitbucket Webhook Runner, or any other CI system
 export CI=true
+
+# Event type
+export EVENT_TYPE=pull_request  # or 'push', 'release'
 
 # Pull Request information
 export PULL_REQUEST_NUMBER=123
@@ -488,10 +503,15 @@ export PR_AUTHOR=john-doe  # PR author username
 
 # Build information
 export BUILD_URL=https://jenkins.example.com/job/myproject/123/
-export GIT_COMMIT=abc123def456789
+export BUILD_NUMBER=123
+export GIT_COMMIT=abc123def456789  # or REPO_COMMIT
 
 # Repository information
 export REPO_URL=https://github.com/myorg/myrepo
+export REPO_NAME=myrepo
+
+# For release builds
+export REPO_TAG=v1.2.3  # or GIT_TAG
 
 python3 pylynk.py upload --prod 'my-product' --sbom sbom.json
 ```
