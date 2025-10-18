@@ -433,6 +433,106 @@ steps:
     # - Repository information
 ```
 
+### CircleCI Integration
+
+In CircleCI, PyLynk automatically detects and extracts workflow information:
+
+#### Using Docker Image (Recommended)
+```yaml
+version: 2.1
+
+jobs:
+  upload-sbom:
+    docker:
+      - image: cimg/base:stable
+    steps:
+      - checkout
+      - setup_remote_docker
+      
+      - run:
+          name: Generate SBOM
+          command: |
+            # Your SBOM generation command here
+            # Example: syft . -o json=sbom.json
+      
+      - run:
+          name: Upload SBOM to Interlynk
+          command: |
+            docker run --rm \
+              -e INTERLYNK_SECURITY_TOKEN=${INTERLYNK_TOKEN} \
+              -e CIRCLECI=${CIRCLECI} \
+              -e CIRCLE_TAG=${CIRCLE_TAG} \
+              -e CIRCLE_PULL_REQUEST=${CIRCLE_PULL_REQUEST} \
+              -e CIRCLE_BRANCH=${CIRCLE_BRANCH} \
+              -e CIRCLE_USERNAME=${CIRCLE_USERNAME} \
+              -e CIRCLE_BUILD_NUM=${CIRCLE_BUILD_NUM} \
+              -e CIRCLE_SHA1=${CIRCLE_SHA1} \
+              -e CIRCLE_BUILD_URL=${CIRCLE_BUILD_URL} \
+              -e CIRCLE_WORKFLOW_ID=${CIRCLE_WORKFLOW_ID} \
+              -e CIRCLE_JOB=${CIRCLE_JOB} \
+              -e CIRCLE_PROJECT_REPONAME=${CIRCLE_PROJECT_REPONAME} \
+              -e CIRCLE_PROJECT_USERNAME=${CIRCLE_PROJECT_USERNAME} \
+              -e CIRCLE_REPOSITORY_URL=${CIRCLE_REPOSITORY_URL} \
+              -v $(pwd):/app/data \
+              ghcr.io/interlynk-io/pylynk \
+              upload --prod 'my-product' --sbom /app/data/sbom.json
+            # PyLynk automatically captures:
+            # - Event type (pull_request, push, or release)
+            # - Release tag (for tag-triggered builds via CIRCLE_TAG)
+            # - PR number and URL (extracted from CIRCLE_PULL_REQUEST)
+            # - Source branch (CIRCLE_BRANCH)
+            # - Author (CIRCLE_USERNAME)
+            # - Build number and URL
+            # - Workflow ID and job name
+            # - Repository information
+
+workflows:
+  version: 2
+  build_and_upload:
+    jobs:
+      - upload-sbom:
+          filters:
+            tags:
+              only: /^v.*/
+```
+
+#### Using Python Directly
+```yaml
+version: 2.1
+
+jobs:
+  upload-sbom:
+    docker:
+      - image: cimg/python:3.9
+    steps:
+      - checkout
+      
+      - run:
+          name: Install dependencies
+          command: pip install -r requirements.txt
+      
+      - run:
+          name: Generate SBOM
+          command: |
+            # Your SBOM generation command here
+      
+      - run:
+          name: Upload SBOM to Interlynk
+          command: |
+            python3 pylynk.py upload --prod 'my-product' --sbom sbom.json
+          environment:
+            INTERLYNK_SECURITY_TOKEN: ${INTERLYNK_TOKEN}
+
+workflows:
+  version: 2
+  build_and_upload:
+    jobs:
+      - upload-sbom:
+          filters:
+            tags:
+              only: /^v.*/
+```
+
 ### Generic CI Support
 
 PyLynk also supports generic CI environments by checking common environment variables. When `CI=true` is set, PyLynk will attempt to extract build and PR information from standard environment variables:
