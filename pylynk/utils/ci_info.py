@@ -8,7 +8,7 @@ import urllib.parse
 logger = logging.getLogger(__name__)
 
 class CIInfo:
-    """Extract CI/CD environment information for GitHub Actions, Bitbucket Pipelines, and Azure DevOps."""
+    """Extract CI/CD environment information for GitHub Actions, Bitbucket Pipelines, Azure DevOps, and CircleCI."""
 
     def __init__(self):
         self.ci_provider = self._detect_ci_provider()
@@ -28,6 +28,8 @@ class CIInfo:
             return 'bitbucket_pipelines'
         if os.getenv('TF_BUILD', '').lower() in ['true', '1'] or os.getenv('SYSTEM_TEAMFOUNDATIONCOLLECTIONURI'):
             return 'azure_devops'
+        if os.getenv('CIRCLECI') == 'true':
+            return 'circleci'
         return None
 
     def _extract_event_info(self):
@@ -184,6 +186,43 @@ class CIInfo:
             else:
                 event_info['event_type'] = "unknown"
 
+        elif self.ci_provider == 'circleci':
+            # Event type detection for CircleCI
+            # Check for tag first (highest priority)
+            if os.getenv('CIRCLE_TAG'):
+                event_info['event_type'] = 'release'
+                event_info.update({
+                    'release_tag': os.getenv('CIRCLE_TAG'),
+                    'author': os.getenv('CIRCLE_USERNAME')
+                })
+            # Check if this is a PR event
+            elif os.getenv('CIRCLE_PULL_REQUEST'):
+                event_info['event_type'] = 'pull_request'
+                pr_url = os.getenv('CIRCLE_PULL_REQUEST')
+                # Extract PR number from URL (format: https://github.com/owner/repo/pull/123)
+                pr_number = None
+                if pr_url:
+                    parts = pr_url.rstrip('/').split('/')
+                    if len(parts) > 0 and parts[-2] == 'pull':
+                        pr_number = parts[-1]
+                
+                event_info.update({
+                    'number': pr_number,
+                    'url': pr_url,
+                    'source_branch': os.getenv('CIRCLE_BRANCH'),
+                    # CircleCI doesn't provide target branch in env vars
+                    'author': os.getenv('CIRCLE_USERNAME')
+                })
+            # Otherwise it's a push
+            elif os.getenv('CIRCLE_BRANCH'):
+                event_info['event_type'] = 'push'
+                event_info.update({
+                    'source_branch': os.getenv('CIRCLE_BRANCH'),
+                    'author': os.getenv('CIRCLE_USERNAME')
+                })
+            else:
+                event_info['event_type'] = 'unknown'
+
         else:
             # Generic CI fallback - support common CI environment variables
             # Detect event type
@@ -261,6 +300,15 @@ class CIInfo:
                 'commit_sha': os.getenv('BITBUCKET_COMMIT'),
                 'build_url': f"https://bitbucket.org/{os.getenv('BITBUCKET_WORKSPACE')}/{os.getenv('BITBUCKET_REPO_SLUG')}/pipelines/results/{os.getenv('BITBUCKET_BUILD_NUMBER')}"
             })
+        elif self.ci_provider == 'circleci':
+            build_info.update({
+                'build_id': os.getenv('CIRCLE_BUILD_NUM'),
+                'build_number': os.getenv('CIRCLE_BUILD_NUM'),
+                'commit_sha': os.getenv('CIRCLE_SHA1'),
+                'build_url': os.getenv('CIRCLE_BUILD_URL'),
+                'workflow_id': os.getenv('CIRCLE_WORKFLOW_ID'),
+                'job_name': os.getenv('CIRCLE_JOB')
+            })
         # Fallbacks - check multiple common environment variable names
         build_info.setdefault('commit_sha', 
             os.getenv('GIT_COMMIT') or 
@@ -297,6 +345,12 @@ class CIInfo:
                 'name': os.getenv('BITBUCKET_REPO_SLUG'),
                 'owner': os.getenv('BITBUCKET_WORKSPACE'),
                 'url': f"https://bitbucket.org/{os.getenv('BITBUCKET_WORKSPACE')}/{os.getenv('BITBUCKET_REPO_SLUG')}"
+            })
+        elif self.ci_provider == 'circleci':
+            repo_info.update({
+                'name': os.getenv('CIRCLE_PROJECT_REPONAME'),
+                'owner': os.getenv('CIRCLE_PROJECT_USERNAME'),
+                'url': os.getenv('CIRCLE_REPOSITORY_URL')
             })
         # Fallbacks - check common repository environment variables
         repo_info.setdefault('url', os.getenv('REPO_URL') or os.getenv('REPOSITORY_URL'))
