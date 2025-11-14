@@ -20,14 +20,15 @@ class CIInfo:
             self._log_extracted_info()
 
     def _detect_ci_provider(self):
-        if os.getenv('CI'):
-            return 'generic_ci'
+        # Check specific CI providers first, then fall back to generic
         if os.getenv('GITHUB_ACTIONS') == 'true':
             return 'github_actions'
         if os.getenv('BITBUCKET_BUILD_NUMBER'):
             return 'bitbucket_pipelines'
         if os.getenv('TF_BUILD', '').lower() in ['true', '1'] or os.getenv('SYSTEM_TEAMFOUNDATIONCOLLECTIONURI'):
             return 'azure_devops'
+        if os.getenv('CI'):
+            return 'generic_ci'
         return None
 
     def _extract_event_info(self):
