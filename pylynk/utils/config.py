@@ -60,12 +60,12 @@ class Config:
         # Upload options
         self.retries = getattr(args, 'retries', 3)
 
+        # Logging - must be set up before CI info extraction
+        self.setup_logging(args)
+
         # CI/CD metadata - only for upload command
         self.subcommand = getattr(args, 'subcommand', None)
         self._extract_ci_info(args)
-
-        # Logging
-        self.setup_logging(args)
 
     def setup_logging(self, args):
         """Set up logging based on verbosity level."""
