@@ -228,6 +228,24 @@ class CIInfo:
             if git_tag:
                 event_info['release_tag'] = git_tag
 
+        # Allow explicit environment variables to override or supplement detected data.
+        explicit_overrides = {
+            'event_type': os.getenv('EVENT_TYPE'),
+            'number': os.getenv('PULL_REQUEST_NUMBER') or os.getenv('PR_NUMBER'),
+            'url': os.getenv('PR_URL'),
+            'source_branch': os.getenv('BRANCH_NAME') or os.getenv('REPO_BRANCH'),
+            'target_branch': os.getenv('PR_TARGET_BRANCH'),
+            'author': os.getenv('PR_AUTHOR'),
+        }
+
+        release_tag = os.getenv('GIT_TAG') or os.getenv('REPO_TAG')
+        if release_tag:
+            explicit_overrides['release_tag'] = release_tag
+
+        for key, value in explicit_overrides.items():
+            if value:
+                event_info[key] = value
+
         return {k: v for k, v in event_info.items() if v}
 
     def _extract_build_info(self):
@@ -299,8 +317,10 @@ class CIInfo:
                 'owner': os.getenv('BITBUCKET_WORKSPACE'),
                 'url': f"https://bitbucket.org/{os.getenv('BITBUCKET_WORKSPACE')}/{os.getenv('BITBUCKET_REPO_SLUG')}"
             })
-        # Fallbacks - check common repository environment variables
-        repo_info.setdefault('url', os.getenv('REPO_URL') or os.getenv('REPOSITORY_URL'))
+        # Explicit environment variables override CI-detected values
+        explicit_repo_url = os.getenv('REPO_URL') or os.getenv('REPOSITORY_URL')
+        if explicit_repo_url:
+            repo_info['url'] = explicit_repo_url
         repo_info.setdefault('name', os.getenv('REPO_NAME') or os.getenv('REPOSITORY_NAME'))
         return {k: v for k, v in repo_info.items() if v}
 
