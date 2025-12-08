@@ -60,6 +60,15 @@ class Config:
         # Upload options
         self.retries = getattr(args, 'retries', 3)
 
+        # Vulns command options
+        self.output_format = getattr(args, 'output', 'table')
+        self.columns = getattr(args, 'columns', None)
+        self.vuln_details = getattr(args, 'vuln_details', False)
+        self.vex_details = getattr(args, 'vex_details', False)
+        self.timestamp_details = getattr(args, 'timestamp_details', False)
+        self.human_time = getattr(args, 'human_time', False)
+        self.list_columns = getattr(args, 'list_columns', False)
+
         # Logging - must be set up before CI info extraction
         self.setup_logging(args)
 

@@ -26,7 +26,7 @@ from pylynk.constants import (
     STATUS_COMPLETED, STATUS_UNKNOWN, STATUS_KEYS
 )
 from pylynk.utils.validators import validate_file_exists, validate_boolean_flag, parse_boolean_flag
-from pylynk.api.queries import PRODUCTS_TOTAL_COUNT, PRODUCTS_LIST, SBOM_DOWNLOAD, SBOM_DOWNLOAD_NEW
+from pylynk.api.queries import PRODUCTS_TOTAL_COUNT, PRODUCTS_LIST, SBOM_DOWNLOAD, SBOM_DOWNLOAD_NEW, VULNS_LIST
 from pylynk.api.mutations import SBOM_UPLOAD
 
 
@@ -684,6 +684,32 @@ class LynkAPIClient:
                 break
 
         return self.config.ver_id is not None
+
+    def get_vulnerabilities(self, project_id, sbom_id, limit=1000):
+        """
+        Get vulnerabilities for a specific SBOM.
+
+        Args:
+            project_id (str): Project/Environment ID
+            sbom_id (str): SBOM/Version ID
+            limit (int): Maximum number of results
+
+        Returns:
+            dict: Vulnerability data with nodes and totalCount, or None if error
+        """
+        variables = {
+            'projectId': project_id,
+            'sbomId': sbom_id,
+            'first': limit
+        }
+
+        result = self._make_request(VULNS_LIST, variables, 'GetVulnProductDetails')
+
+        if result and 'data' in result:
+            sbom_data = result['data'].get('sbom', {})
+            return sbom_data.get('vulns', {})
+
+        return None
 
     def print_api_summary(self):
         """Print summary of API calls made during the session."""
