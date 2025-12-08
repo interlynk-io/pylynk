@@ -14,6 +14,11 @@
 
 """CSV formatter for PyLynk CLI output."""
 
+import csv
+import sys
+
+from pylynk.constants import VULN_COLUMNS
+
 
 def format_csv(content, output_file=None):
     """
@@ -28,3 +33,28 @@ def format_csv(content, output_file=None):
             f.write(content)
     else:
         print(content)
+
+
+def format_vulns_csv(vulns, columns):
+    """
+    Format vulnerabilities as CSV output.
+
+    Args:
+        vulns (list): List of pre-formatted vulnerability dictionaries (with header names as keys)
+        columns (list): List of column names to display
+    """
+    if not vulns:
+        return
+
+    writer = csv.writer(sys.stdout)
+
+    # Get headers for the columns
+    headers = [VULN_COLUMNS[c]['header'] for c in columns if c in VULN_COLUMNS]
+
+    # Write header
+    writer.writerow(headers)
+
+    # Write rows
+    for vuln in vulns:
+        row = [vuln.get(h, '') for h in headers]
+        writer.writerow(row)

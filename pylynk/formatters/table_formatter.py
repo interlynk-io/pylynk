@@ -15,6 +15,7 @@
 """Table formatter for PyLynk CLI output."""
 
 from pylynk.utils.time import user_time
+from pylynk.constants import VULN_COLUMNS
 
 
 def format_products_table(products):
@@ -144,3 +145,42 @@ def format_status_table(status):
             f"{value:<{value_width}}  |"
         )
         print(row)
+
+
+def format_vulns_table(vulns, columns):
+    """
+    Format vulnerabilities as a table with dynamic columns.
+
+    Args:
+        vulns (list): List of pre-formatted vulnerability dictionaries (with header names as keys)
+        columns (list): List of column names to display
+    """
+    if not vulns:
+        print('No vulnerabilities found')
+        return
+
+    # Get headers for the columns
+    headers = [VULN_COLUMNS[c]['header'] for c in columns if c in VULN_COLUMNS]
+
+    if not headers:
+        print('No valid columns specified')
+        return
+
+    # Calculate column widths based on header names and values
+    col_widths = {}
+    for header in headers:
+        max_val_len = max(len(str(v.get(header, ''))) for v in vulns) if vulns else 0
+        col_widths[header] = max(len(header), max_val_len, 5)  # Minimum width of 5
+
+    # Print header
+    header_parts = [f"{h:<{col_widths[h]}}" for h in headers]
+    print(" | ".join(header_parts))
+
+    # Print separator
+    separator_parts = ["-" * col_widths[h] for h in headers]
+    print("-|-".join(separator_parts))
+
+    # Print rows
+    for vuln in vulns:
+        row_parts = [f"{str(vuln.get(h, '')):<{col_widths[h]}}" for h in headers]
+        print(" | ".join(row_parts))

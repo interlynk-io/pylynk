@@ -133,5 +133,26 @@ def create_parser():
 
     # Version command
     version_parser = subparsers.add_parser("version", help="Show version information")
-    
+
+    # Vulns command
+    vulns_parser = subparsers.add_parser("vulns", help="List Vulnerabilities")
+    add_product_arguments(vulns_parser, required=False)
+    vulns_parser.add_argument("--env", help="Environment", required=False)
+    add_version_arguments(vulns_parser, required=False)
+    vulns_parser.add_argument("--vuln-details", action='store_true',
+                              help="Include vulnerability metadata columns (kev, cvss, epss, cwe, etc.)")
+    vulns_parser.add_argument("--vex-details", action='store_true',
+                              help="Include VEX information columns")
+    vulns_parser.add_argument("--timestamp-details", action='store_true',
+                              help="Include all timestamp columns (published, last_modified, updated)")
+    vulns_parser.add_argument("--human-time", action='store_true',
+                              help="Show timestamps in human-friendly format (e.g., '2 days ago')")
+    vulns_parser.add_argument("--columns",
+                              help="Comma-separated list of columns to display")
+    vulns_parser.add_argument("--list-columns", action='store_true',
+                              help="List available column names and exit")
+    vulns_parser.add_argument("--output", choices=['table', 'json', 'csv'],
+                              default='table', help="Output format (default: table)")
+    add_common_arguments(vulns_parser)
+
     return parser

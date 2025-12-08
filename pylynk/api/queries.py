@@ -140,3 +140,66 @@ query GetProductById($id: ID!) {
   }
 }
 """
+
+# Query to get vulnerabilities for a specific SBOM
+VULNS_LIST = """
+query GetVulnProductDetails($projectId: Uuid!, $sbomId: Uuid!, $first: Int) {
+  sbom(projectId: $projectId, sbomId: $sbomId) {
+    vulns(sbomId: $sbomId, first: $first) {
+      totalCount
+      nodes {
+        id
+        isPart
+        createdAt
+        fixedIn
+        vexStatus {
+          name
+        }
+        vuln {
+          id
+          vulnId
+          source
+          updatedAt
+          publishedAt
+          lastModifiedAt
+          cvssScore
+          nvdAliasId
+          sev
+          cvssVector
+          vulnInfo {
+            kev
+            epssScore
+            epssPercentile
+            cwes
+          }
+        }
+        vexJustification {
+          name
+        }
+        impact
+        detail
+        note
+        actionStmt
+        cdxResponse {
+          name
+        }
+        fixedVersions
+        component {
+          name
+          version
+          kind
+          ecosystem
+          sbom {
+            projectVersion
+            project {
+              projectGroup {
+                name
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
