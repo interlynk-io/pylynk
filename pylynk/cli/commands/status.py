@@ -16,6 +16,7 @@
 
 from pylynk.formatters.json_formatter import format_json
 from pylynk.formatters.table_formatter import format_status_table
+from pylynk.constants import STATUS_COLUMNS, DEFAULT_STATUS_COLUMNS
 
 
 def execute(api_client, config):
@@ -39,9 +40,35 @@ def execute(api_client, config):
         print('Failed to fetch status for the version')
         return 1
 
-    if config.format_json:
-        format_json(status)
+    # Transform raw dict data to formatted list of rows
+    formatted_status = _format_status_data(status)
+
+    # Output based on format
+    output_format = getattr(config, 'output_format', 'table')
+
+    if output_format == 'json':
+        format_json(formatted_status)
     else:
-        format_status_table(status)
+        format_status_table(formatted_status)
 
     return 0
+
+
+def _format_status_data(status):
+    """
+    Transform raw status dictionary into formatted rows.
+
+    Args:
+        status (dict): Status dictionary with action keys and status values
+
+    Returns:
+        list: List of dictionaries with column headers as keys
+    """
+    formatted = []
+    for key, value in status.items():
+        row = {
+            STATUS_COLUMNS['action_key']['header']: key,
+            STATUS_COLUMNS['status']['header']: value
+        }
+        formatted.append(row)
+    return formatted

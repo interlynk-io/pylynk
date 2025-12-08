@@ -20,7 +20,7 @@ python3 pylynk.py download --prod <product-name> --env <environment> --ver <vers
 | `--verId` | Version ID (mutually exclusive with `--ver`) |
 | `--ver` | Version name (mutually exclusive with `--verId`) |
 | `--env` | Environment name |
-| `--output` | Output file path |
+| `--out-file` | Output file path |
 | `--vuln` | Include vulnerabilities (true/false/yes/no/1/0) |
 | `--spec` | SBOM specification (SPDX or CycloneDX) |
 | `--spec-version` | SBOM specification version |
@@ -45,6 +45,12 @@ python3 pylynk.py download --prod 'sbomqs' --verId 'fbcc24ad-5911-4229-8943-acf8
 
 ```bash
 python3 pylynk.py download --prod 'sbomqs' --env 'default' --ver 'v1.0.0'
+```
+
+### Download to a file
+
+```bash
+python3 pylynk.py download --prod 'sbomqs' --verId 'fbcc24ad-...' --out-file sbom.json
 ```
 
 ### Download with vulnerabilities
@@ -86,7 +92,7 @@ python3 pylynk.py download --prod 'sbomqs' --verId 'fbcc24ad-...' \
 
 ```bash
 python3 pylynk.py download --prod 'sbomqs' --verId 'fbcc24ad-...' \
-  --support-level-only --output support-levels.csv
+  --support-level-only --out-file support-levels.csv
 ```
 
 ### Using Docker
@@ -95,7 +101,7 @@ python3 pylynk.py download --prod 'sbomqs' --verId 'fbcc24ad-...' \
 docker run -e INTERLYNK_SECURITY_TOKEN=$INTERLYNK_SECURITY_TOKEN \
   -v $(pwd):/app/data \
   ghcr.io/interlynk-io/pylynk download --prod 'sbomqs' --verId 'fbcc24ad-...' \
-  --output /app/data/sbom.json
+  --out-file /app/data/sbom.json
 ```
 
 ## Download Options Explained

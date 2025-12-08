@@ -58,13 +58,25 @@ def main():
         # Validate download parameters early
         has_id_params = bool(config.ver_id)
         has_name_params = all([config.prod, config.env, config.ver])
-        
+
         if not has_id_params and not has_name_params:
-            print("Error: Please provide either --verId OR all of --prod, --env, and --ver")
+            print("Error: Missing required parameters for download")
+            print()
+            print("Please provide either:")
+            print("  --verId <version-id>")
+            print("    OR")
+            print("  --prod <product> --env <environment> --ver <version>")
+            print()
+            print("Examples:")
+            print("  pylynk download --verId 'abc-123-def'")
+            print("  pylynk download --prod 'my-product' --env 'default' --ver 'v1.0.0'")
+            print()
+            print("For more information: pylynk download --help")
             return 1
-            
-        # Download can now use minimal init if validation passes
-        needs_full_init = False
+
+        # Download needs full init when using names to resolve to IDs
+        # Only use minimal init when verId is provided directly
+        needs_full_init = not has_id_params
     
     # Initialize API client
     if needs_full_init:
@@ -90,8 +102,19 @@ def main():
     elif args.subcommand == "vulns":
         exit_code = vulns.execute(api_client, config)
     else:
-        print("Missing or invalid command. "
-              "Supported commands: {prods, vers, status, upload, download, version, vulns}")
+        print("Error: No command specified")
+        print()
+        print("Available commands:")
+        print("  prods      List products")
+        print("  vers       List versions for a product")
+        print("  status     Check SBOM processing status")
+        print("  upload     Upload an SBOM")
+        print("  download   Download an SBOM")
+        print("  vulns      List vulnerabilities")
+        print("  version    Show version information")
+        print()
+        print("For help: pylynk --help")
+        print("For command help: pylynk <command> --help")
         exit_code = 1
     
     return exit_code

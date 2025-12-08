@@ -31,16 +31,18 @@ def execute(api_client, config):
     Returns:
         int: Exit code (0 for success, 1 for error)
     """
+    # If using names instead of IDs, resolve them first
+    if not config.ver_id and config.prod and config.env and config.ver:
+        if not api_client.resolve_identifiers():
+            return 1
+
     # Parse boolean flag for vulnerabilities
     include_vulns = parse_boolean_flag(config.vuln)
 
-    # Call download with all parameters
+    # Call download with resolved IDs
     content, content_type, filename = api_client.download_sbom(
         env_id=config.env_id,
         ver_id=config.ver_id,
-        env_name=config.env,
-        prod_name=config.prod,
-        ver_name=config.ver,
         include_vulns=include_vulns,
         spec=config.spec,
         spec_version=config.spec_version,
