@@ -65,9 +65,9 @@ query GetProducts($first: Int) {
 
 # Query to download an SBOM (current server format)
 SBOM_DOWNLOAD = """
-query downloadSbom($projectId: Uuid!, $sbomId: Uuid!, $includeVulns: Boolean, 
-                   $spec: String, $original: Boolean, $package: Boolean, 
-                   $lite: Boolean, $excludeParts: Boolean, 
+query downloadSbom($projectId: Uuid!, $sbomId: Uuid!, $includeVulns: Boolean,
+                   $spec: SbomSpec, $original: Boolean, $package: Boolean,
+                   $lite: Boolean, $excludeParts: Boolean,
                    $supportLevelOnly: Boolean, $includeSupportStatus: Boolean) {
   sbom(projectId: $projectId, sbomId: $sbomId) {
     download(

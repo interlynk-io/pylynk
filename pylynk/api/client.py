@@ -339,8 +339,7 @@ class LynkAPIClient:
 
         return result
 
-    def download_sbom(self, env_id=None, ver_id=None, env_name=None,
-                      prod_name=None, ver_name=None, include_vulns=False,
+    def download_sbom(self, env_id=None, ver_id=None, include_vulns=False,
                       spec=None, spec_version=None, lite=False,
                       dont_package_sbom=False, original=False,
                       exclude_parts=False, include_support_status=False,
@@ -349,11 +348,8 @@ class LynkAPIClient:
         Download an SBOM from the API.
 
         Args:
-            env_id (str): Environment ID (projectId) (optional)
-            ver_id (str): Version ID (sbomId) (optional)
-            env_name (str): Environment name (projectName) (optional)
-            prod_name (str): Product name (projectGroupName) (optional)
-            ver_name (str): Version name (versionName) (optional)
+            env_id (str): Environment ID (projectId) - required
+            ver_id (str): Version ID (sbomId) - required
             include_vulns (bool): Include vulnerabilities in download
             spec (str): SBOM specification (SPDX or CycloneDX)
             spec_version (str): SBOM specification version
@@ -367,23 +363,16 @@ class LynkAPIClient:
         Returns:
             tuple: (content, content_type, filename) or (None, None, None) if error
         """
-        # Build variables for new server format
-        variables = {}
+        # Validate required IDs
+        if not ver_id or not env_id:
+            print('Error: Both version ID and environment ID are required for download')
+            return None, None, None
 
-        # Add identifier parameters
-        if ver_id:
-            variables["sbomId"] = ver_id
-        if env_id:
-            variables["projectId"] = env_id
-        if prod_name:
-            # Trim the product name before sending to API
-            variables["projectGroupName"] = prod_name.strip()
-        if env_name:
-            # Lowercase and trim the environment name before sending to API
-            variables["projectName"] = env_name.strip().lower()
-        if ver_name:
-            # Lowercase and trim the version name before sending to API
-            variables["versionName"] = ver_name.strip().lower()
+        # Build variables - the query requires projectId and sbomId
+        variables = {
+            "projectId": env_id,
+            "sbomId": ver_id
+        }
 
         # Add optional parameters
         if include_vulns:
@@ -405,11 +394,11 @@ class LynkAPIClient:
             variables["includeSupportStatus"] = include_support_status
 
         logging.debug("Downloading SBOM with parameters: %s", variables)
-        logging.debug("GraphQL Query for download:\n%s", SBOM_DOWNLOAD_NEW)
+        logging.debug("GraphQL Query for download:\n%s", SBOM_DOWNLOAD)
         logging.debug("Query variables: %s", json.dumps(variables, indent=2))
 
         response_data = self._make_request(
-            SBOM_DOWNLOAD_NEW, variables, operation_name="downloadSbom")
+            SBOM_DOWNLOAD, variables, operation_name="downloadSbom")
 
         if not response_data:
             return None, None, None
@@ -417,8 +406,17 @@ class LynkAPIClient:
         if "errors" in response_data:
             return None, None, None
 
-        sbom = response_data.get('data', {}).get(
-            'sbom', {}).get('download', {})
+        data = response_data.get('data')
+        if not data:
+            print('Error: No data returned from API')
+            return None, None, None
+
+        sbom_data = data.get('sbom')
+        if not sbom_data:
+            print('Error: SBOM not found - check product, environment, and version')
+            return None, None, None
+
+        sbom = sbom_data.get('download', {})
 
         if not sbom:
             print('No SBOM matched with the given criteria')
