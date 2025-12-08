@@ -46,9 +46,9 @@ class Config:
         self.subcommand = getattr(args, 'subcommand', None)
 
         # Output options
-        # For download command, 'output' is the file path; for others it's the format
+        # For download command, 'out_file' is the file path; for others 'output' is the format
         if self.subcommand == 'download':
-            self.output_file = getattr(args, 'output', None)
+            self.output_file = getattr(args, 'out_file', None)
             self.output_format = 'json'  # download outputs raw SBOM
         else:
             self.output_file = None

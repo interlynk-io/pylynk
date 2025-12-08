@@ -62,6 +62,16 @@ def add_product_arguments(parser, required=True):
     parser.add_argument("--prod", help="Product name", required=required)
 
 
+def add_environment_argument(parser):
+    """
+    Add environment argument to a parser.
+
+    Args:
+        parser: Argument parser or subparser
+    """
+    parser.add_argument("--env", help="Environment", required=False)
+
+
 def add_version_arguments(parser, required=True):
     """
     Add version identification arguments.
@@ -96,7 +106,7 @@ def create_parser():
     # Versions command
     vers_parser = subparsers.add_parser("vers", help="List Versions")
     add_product_arguments(vers_parser)
-    vers_parser.add_argument("--env", help="Environment", required=False)
+    add_environment_argument(vers_parser)
     add_common_arguments(vers_parser)
     add_output_format_group(vers_parser)
     add_human_time_argument(vers_parser)
@@ -104,15 +114,15 @@ def create_parser():
     # Status command
     status_parser = subparsers.add_parser("status", help="SBOM Status")
     add_product_arguments(status_parser)
+    add_environment_argument(status_parser)
     add_version_arguments(status_parser)
-    status_parser.add_argument("--env", help="Environment", required=False)
     add_common_arguments(status_parser)
     add_output_format_group(status_parser, include_csv=False)
 
     # Upload command
     upload_parser = subparsers.add_parser("upload", help="Upload SBOM")
     add_product_arguments(upload_parser)
-    upload_parser.add_argument("--env", help="Environment", required=False)
+    add_environment_argument(upload_parser)
     upload_parser.add_argument("--sbom", required=True, help="SBOM path")
     upload_parser.add_argument(
         "--retries", type=int, default=3, help="Number of upload retries (default: 3)")
@@ -121,10 +131,10 @@ def create_parser():
     # Download command
     download_parser = subparsers.add_parser("download", help="Download SBOM")
     add_product_arguments(download_parser, required=False)
+    add_environment_argument(download_parser)
     add_version_arguments(download_parser, required=False)
-    download_parser.add_argument("--env", help="Environment", required=False)
     download_parser.add_argument(
-        "--output", help="Output file", required=False)
+        "--out-file", "--output", dest="out_file", help="Output file", required=False)
     download_parser.add_argument(
         "--vuln", help="Include vulnerabilities", required=False)
     download_parser.add_argument("--spec", help="SBOM specification (SPDX or CycloneDX)",
@@ -149,7 +159,7 @@ def create_parser():
     # Vulns command
     vulns_parser = subparsers.add_parser("vulns", help="List Vulnerabilities")
     add_product_arguments(vulns_parser, required=False)
-    vulns_parser.add_argument("--env", help="Environment", required=False)
+    add_environment_argument(vulns_parser)
     add_version_arguments(vulns_parser, required=False)
     vulns_parser.add_argument("--vuln-details", action='store_true',
                               help="Include vulnerability metadata columns (kev, cvss, epss, cwe, etc.)")

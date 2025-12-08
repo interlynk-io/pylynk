@@ -68,7 +68,7 @@ python3 pylynk.py upload --prod 'my-product' --sbom my-sbom.json
 ### Download an SBOM
 
 ```bash
-python3 pylynk.py download --prod 'my-product' --verId 'version-id' --output sbom.json
+python3 pylynk.py download --prod 'my-product' --verId 'version-id' --out-file sbom.json
 ```
 
 ### List Vulnerabilities
@@ -88,7 +88,7 @@ docker run -e INTERLYNK_SECURITY_TOKEN=$INTERLYNK_SECURITY_TOKEN \
 # Download
 docker run -e INTERLYNK_SECURITY_TOKEN=$INTERLYNK_SECURITY_TOKEN \
   -v $(pwd):/app/data \
-  ghcr.io/interlynk-io/pylynk download --prod 'my-product' --verId 'version-id' --output /app/data/sbom.json
+  ghcr.io/interlynk-io/pylynk download --prod 'my-product' --verId 'version-id' --out-file /app/data/sbom.json
 ```
 
 ## Commands
