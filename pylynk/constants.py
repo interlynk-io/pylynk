@@ -61,6 +61,34 @@ CONTENT_TYPE_JSON = 'application/json'
 CONTENT_TYPE_XML = 'text/xml'
 CONTENT_TYPE_CSV = 'text/csv'
 
+# Product column definitions for prods command
+PRODUCT_COLUMNS = {
+    'name': {'path': ['name'], 'header': 'NAME'},
+    'id': {'path': ['id'], 'header': 'ID'},
+    'versions': {'path': ['versions'], 'header': 'VERSIONS'},
+    'updated_at': {'path': ['updatedAt'], 'header': 'UPDATED AT', 'is_timestamp': True},
+}
+
+DEFAULT_PRODUCT_COLUMNS = ['name', 'id', 'versions', 'updated_at']
+
+# Version column definitions for vers command
+VERSION_COLUMNS = {
+    'id': {'path': ['id'], 'header': 'ID'},
+    'version': {'path': ['primaryComponent', 'version'], 'header': 'VERSION'},
+    'primary_component': {'path': ['primaryComponent', 'name'], 'header': 'PRIMARY COMPONENT'},
+    'updated_at': {'path': ['updatedAt'], 'header': 'UPDATED AT', 'is_timestamp': True},
+}
+
+DEFAULT_VERSION_COLUMNS = ['id', 'version', 'primary_component', 'updated_at']
+
+# Status column definitions for status command
+STATUS_COLUMNS = {
+    'action_key': {'header': 'ACTION KEY'},
+    'status': {'header': 'STATUS'},
+}
+
+DEFAULT_STATUS_COLUMNS = ['action_key', 'status']
+
 # Vulnerability column definitions for vulns command
 # Note: 'part_name' and 'part_version' use special handling based on 'isPart' flag
 VULN_COLUMNS = {

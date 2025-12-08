@@ -14,137 +14,96 @@
 
 """Table formatter for PyLynk CLI output."""
 
-from pylynk.utils.time import user_time
-from pylynk.constants import VULN_COLUMNS
+from pylynk.constants import (
+    VULN_COLUMNS, PRODUCT_COLUMNS, VERSION_COLUMNS, STATUS_COLUMNS,
+    DEFAULT_PRODUCT_COLUMNS, DEFAULT_VERSION_COLUMNS, DEFAULT_STATUS_COLUMNS
+)
 
 
-def format_products_table(products):
+def _format_generic_table(data, columns, column_defs):
+    """
+    Generic table formatter for any data type.
+
+    Args:
+        data (list): List of pre-formatted dictionaries (with header names as keys)
+        columns (list): List of column names to display
+        column_defs (dict): Column definitions with headers
+    """
+    if not data:
+        return
+
+    # Get headers for the columns
+    headers = [column_defs[c]['header'] for c in columns if c in column_defs]
+
+    if not headers:
+        return
+
+    # Calculate column widths based on header names and values
+    col_widths = {}
+    for header in headers:
+        max_val_len = max(len(str(v.get(header, ''))) for v in data) if data else 0
+        col_widths[header] = max(len(header), max_val_len, 5)  # Minimum width of 5
+
+    # Print header
+    header_parts = [f"{h:<{col_widths[h]}}" for h in headers]
+    print(" | ".join(header_parts))
+
+    # Print separator
+    separator_parts = ["-" * col_widths[h] for h in headers]
+    print("-|-".join(separator_parts))
+
+    # Print rows
+    for item in data:
+        row_parts = [f"{str(item.get(h, '')):<{col_widths[h]}}" for h in headers]
+        print(" | ".join(row_parts))
+
+
+def format_products_table(products, columns=None):
     """
     Format products list as a table.
 
     Args:
-        products (list): List of product dictionaries
+        products (list): List of pre-formatted product dictionaries
+        columns (list): Optional list of column names to display
     """
     if not products:
         print("No products found")
         return
 
-    # Calculate dynamic column widths
-    name_width = max(len("NAME"), max(len(prod['name']) for prod in products))
-    updated_at_width = max(len("UPDATED AT"),
-                           max(len(user_time(prod['updatedAt'])) for prod in products))
-    id_width = max(len("ID"), max(len(prod['id']) for prod in products))
-    version_width = len("VERSIONS")
-
-    # Print header
-    header = (
-        f"{'NAME':<{name_width}} | "
-        f"{'ID':<{id_width}} | "
-        f"{'VERSIONS':<{version_width}} | "
-        f"{'UPDATED AT':<{updated_at_width}} | "
-    )
-    print(header)
-
-    # Print separator line
-    width = sum([name_width, version_width, updated_at_width, id_width]) + 10
-    line = "-" * width + "|"
-    print(line)
-
-    # Print rows
-    for prod in products:
-        row = (
-            f"{prod['name']:<{name_width}} | "
-            f"{prod['id']:<{id_width}} | "
-            f"{prod['versions']:<{version_width}} | "
-            f"{user_time(prod['updatedAt']):<{updated_at_width}} | "
-        )
-        print(row)
+    columns = columns or DEFAULT_PRODUCT_COLUMNS
+    _format_generic_table(products, columns, PRODUCT_COLUMNS)
 
 
-def format_versions_table(versions):
+def format_versions_table(versions, columns=None):
     """
     Format versions list as a table.
 
     Args:
-        versions (list): List of version dictionaries
+        versions (list): List of pre-formatted version dictionaries
+        columns (list): Optional list of column names to display
     """
     if not versions:
         print('No versions found')
         return
 
-    # Calculate dynamic column widths
-    id_width = max(len('ID'), max(len(sbom['id']) for sbom in versions))
-    version_width = max(len('VERSION'), max(
-        len(str(s.get('primaryComponent', {}).get('version', ''))) for s in versions))
-    primary_component_width = max(len('PRIMARY COMPONENT'), max(
-        len(str(sbom.get('primaryComponent', {}).get('name', ''))) for sbom in versions))
-    updated_at_width = max(len('UPDATED AT'),
-                           max(len(user_time(sbom['updatedAt'])) for sbom in versions))
-
-    # Print header
-    header = (
-        f"{'ID':<{id_width}} | "
-        f"{'VERSION':<{version_width}} | "
-        f"{'PRIMARY COMPONENT':<{primary_component_width}} | "
-        f"{'UPDATED AT':<{updated_at_width}} |"
-    )
-    print(header)
-
-    # Print separator line
-    width = sum([id_width, version_width,
-                primary_component_width, updated_at_width]) + 10
-    line = "-" * width + "|"
-    print(line)
-
-    # Print rows
-    for sbom in versions:
-        if sbom.get('primaryComponent') is None:
-            continue
-        version = sbom.get('primaryComponent', {}).get('version', '')
-        primary_component = sbom.get('primaryComponent', {}).get('name', '')
-        row = (
-            f"{sbom['id']:<{id_width}} | "
-            f"{str(version):<{version_width}} | "
-            f"{primary_component:<{primary_component_width}} | "
-            f"{user_time(sbom['updatedAt']):<{updated_at_width}} |"
-        )
-        print(row)
+    columns = columns or DEFAULT_VERSION_COLUMNS
+    _format_generic_table(versions, columns, VERSION_COLUMNS)
 
 
-def format_status_table(status):
+def format_status_table(status, columns=None):
     """
-    Format status dictionary as a table.
+    Format status list as a table.
 
     Args:
-        status (dict): Status dictionary
+        status (list): List of pre-formatted status dictionaries
+        columns (list): Optional list of column names to display
     """
     if not status:
         print('Failed to fetch status for the version')
         return
 
-    # Fixed column widths for status display
-    key_width = 20
-    value_width = 20
-
-    # Print header
-    header = (
-        f"{'ACTION KEY':<{key_width}} | "
-        f"{'STATUS':<{value_width}}"
-    )
-    print(header)
-
-    # Print separator line
-    width = key_width + value_width + 5
-    line = "-" * width + "|"
-    print(line)
-
-    # Print rows
-    for key, value in status.items():
-        row = (
-            f"{key:<{key_width}} | "
-            f"{value:<{value_width}}  |"
-        )
-        print(row)
+    columns = columns or DEFAULT_STATUS_COLUMNS
+    _format_generic_table(status, columns, STATUS_COLUMNS)
 
 
 def format_vulns_table(vulns, columns):

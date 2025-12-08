@@ -17,22 +17,75 @@
 import csv
 import sys
 
-from pylynk.constants import VULN_COLUMNS
+from pylynk.constants import (
+    VULN_COLUMNS, PRODUCT_COLUMNS, VERSION_COLUMNS, STATUS_COLUMNS,
+    DEFAULT_PRODUCT_COLUMNS, DEFAULT_VERSION_COLUMNS, DEFAULT_STATUS_COLUMNS
+)
 
 
-def format_csv(content, output_file=None):
+def _format_generic_csv(data, columns, column_defs):
     """
-    Format and output CSV content.
+    Generic CSV formatter for any data type.
 
     Args:
-        content (str): CSV content to output
-        output_file (str): Optional output file path
+        data (list): List of pre-formatted dictionaries (with header names as keys)
+        columns (list): List of column names to display
+        column_defs (dict): Column definitions with headers
     """
-    if output_file:
-        with open(output_file, 'w') as f:
-            f.write(content)
-    else:
-        print(content)
+    if not data:
+        return
+
+    writer = csv.writer(sys.stdout)
+
+    # Get headers for the columns
+    headers = [column_defs[c]['header'] for c in columns if c in column_defs]
+
+    if not headers:
+        return
+
+    # Write header
+    writer.writerow(headers)
+
+    # Write rows
+    for item in data:
+        row = [item.get(h, '') for h in headers]
+        writer.writerow(row)
+
+
+def format_products_csv(products, columns=None):
+    """
+    Format products list as CSV output.
+
+    Args:
+        products (list): List of pre-formatted product dictionaries
+        columns (list): Optional list of column names to display
+    """
+    columns = columns or DEFAULT_PRODUCT_COLUMNS
+    _format_generic_csv(products, columns, PRODUCT_COLUMNS)
+
+
+def format_versions_csv(versions, columns=None):
+    """
+    Format versions list as CSV output.
+
+    Args:
+        versions (list): List of pre-formatted version dictionaries
+        columns (list): Optional list of column names to display
+    """
+    columns = columns or DEFAULT_VERSION_COLUMNS
+    _format_generic_csv(versions, columns, VERSION_COLUMNS)
+
+
+def format_status_csv(status, columns=None):
+    """
+    Format status list as CSV output.
+
+    Args:
+        status (list): List of pre-formatted status dictionaries
+        columns (list): Optional list of column names to display
+    """
+    columns = columns or DEFAULT_STATUS_COLUMNS
+    _format_generic_csv(status, columns, STATUS_COLUMNS)
 
 
 def format_vulns_csv(vulns, columns):
@@ -43,18 +96,4 @@ def format_vulns_csv(vulns, columns):
         vulns (list): List of pre-formatted vulnerability dictionaries (with header names as keys)
         columns (list): List of column names to display
     """
-    if not vulns:
-        return
-
-    writer = csv.writer(sys.stdout)
-
-    # Get headers for the columns
-    headers = [VULN_COLUMNS[c]['header'] for c in columns if c in VULN_COLUMNS]
-
-    # Write header
-    writer.writerow(headers)
-
-    # Write rows
-    for vuln in vulns:
-        row = [vuln.get(h, '') for h in headers]
-        writer.writerow(row)
+    _format_generic_csv(vulns, columns, VULN_COLUMNS)

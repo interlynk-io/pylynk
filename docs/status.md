@@ -16,9 +16,8 @@ python3 pylynk.py status --prod <product-name> --verId <version-id> [OPTIONS]
 | `--verId` | Version ID (mutually exclusive with `--ver`) |
 | `--ver` | Version name (mutually exclusive with `--verId`) |
 | `--env` | Environment name (optional, defaults to 'default') |
+| `--output` | Output format: `table` (default) or `json` |
 | `--token` | Security token (can also use `INTERLYNK_SECURITY_TOKEN` env var) |
-| `--table` | Output in table format |
-| `--json` | Output in JSON format (default) |
 | `-v, --verbose` | Enable verbose/debug output |
 
 ## Status Values

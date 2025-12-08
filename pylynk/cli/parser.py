@@ -17,18 +17,28 @@
 import argparse
 
 
-def add_output_format_group(parser):
+def add_output_format_group(parser, include_csv=True):
     """
-    Add mutually exclusive output format arguments to a parser.
+    Add output format arguments to a parser.
+
+    Args:
+        parser: Argument parser or subparser
+        include_csv (bool): Whether to include CSV as an option
+    """
+    choices = ['table', 'json', 'csv'] if include_csv else ['table', 'json']
+    parser.add_argument("--output", choices=choices,
+                        default='table', help="Output format (default: table)")
+
+
+def add_human_time_argument(parser):
+    """
+    Add human-friendly time format argument to a parser.
 
     Args:
         parser: Argument parser or subparser
     """
-    output_group = parser.add_mutually_exclusive_group()
-    output_group.add_argument(
-        "--json", action='store_true', help="JSON Formatted (default)")
-    output_group.add_argument(
-        "--table", action='store_true', help="Table Formatted")
+    parser.add_argument("--human-time", action='store_true',
+                        help="Show timestamps in human-friendly format (e.g., '2 days ago')")
 
 
 def add_common_arguments(parser):
@@ -81,6 +91,7 @@ def create_parser():
     products_parser = subparsers.add_parser("prods", help="List products")
     add_common_arguments(products_parser)
     add_output_format_group(products_parser)
+    add_human_time_argument(products_parser)
 
     # Versions command
     vers_parser = subparsers.add_parser("vers", help="List Versions")
@@ -88,6 +99,7 @@ def create_parser():
     vers_parser.add_argument("--env", help="Environment", required=False)
     add_common_arguments(vers_parser)
     add_output_format_group(vers_parser)
+    add_human_time_argument(vers_parser)
 
     # Status command
     status_parser = subparsers.add_parser("status", help="SBOM Status")
@@ -95,7 +107,7 @@ def create_parser():
     add_version_arguments(status_parser)
     status_parser.add_argument("--env", help="Environment", required=False)
     add_common_arguments(status_parser)
-    add_output_format_group(status_parser)
+    add_output_format_group(status_parser, include_csv=False)
 
     # Upload command
     upload_parser = subparsers.add_parser("upload", help="Upload SBOM")
@@ -145,14 +157,12 @@ def create_parser():
                               help="Include VEX information columns")
     vulns_parser.add_argument("--timestamp-details", action='store_true',
                               help="Include all timestamp columns (published, last_modified, updated)")
-    vulns_parser.add_argument("--human-time", action='store_true',
-                              help="Show timestamps in human-friendly format (e.g., '2 days ago')")
     vulns_parser.add_argument("--columns",
                               help="Comma-separated list of columns to display")
     vulns_parser.add_argument("--list-columns", action='store_true',
                               help="List available column names and exit")
-    vulns_parser.add_argument("--output", choices=['table', 'json', 'csv'],
-                              default='table', help="Output format (default: table)")
     add_common_arguments(vulns_parser)
+    add_output_format_group(vulns_parser)
+    add_human_time_argument(vulns_parser)
 
     return parser

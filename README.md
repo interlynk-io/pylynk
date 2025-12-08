@@ -105,14 +105,27 @@ docker run -e INTERLYNK_SECURITY_TOKEN=$INTERLYNK_SECURITY_TOKEN \
 
 ## Output Formats
 
-Most commands support multiple output formats:
+All commands support multiple output formats via `--output`:
 
-- `--json` - JSON format (default for most commands)
-- `--table` - Human-readable table format
+- `table` - Human-readable table format (default)
+- `json` - JSON format for programmatic use
+- `csv` - CSV format for spreadsheet import
 
-The `vulns` command additionally supports:
+Commands with timestamps also support `--human-time` to display timestamps in human-friendly format (e.g., '2 days ago').
 
-- `--output csv` - CSV format for spreadsheet import
+```bash
+# Table format (default)
+python3 pylynk.py prods
+
+# JSON format
+python3 pylynk.py prods --output json
+
+# CSV format
+python3 pylynk.py prods --output csv
+
+# With human-friendly timestamps
+python3 pylynk.py prods --human-time
+```
 
 ## CI/CD Integration
 

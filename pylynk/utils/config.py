@@ -42,10 +42,21 @@ class Config:
         self.ver_id = getattr(args, 'verId', None)
         self.ver = getattr(args, 'ver', None)
 
+        # Subcommand - needed early to determine output behavior
+        self.subcommand = getattr(args, 'subcommand', None)
+
         # Output options
-        self.output_file = getattr(args, 'output', None)
+        # For download command, 'output' is the file path; for others it's the format
+        if self.subcommand == 'download':
+            self.output_file = getattr(args, 'output', None)
+            self.output_format = 'json'  # download outputs raw SBOM
+        else:
+            self.output_file = None
+            self.output_format = getattr(args, 'output', 'table')
+
         self.vuln = getattr(args, 'vuln', None)
-        self.format_json = not getattr(args, 'table', False)
+        # Human-friendly time format for all commands with timestamps
+        self.human_time = getattr(args, 'human_time', False)
 
         # Download options
         self.spec = getattr(args, 'spec', None)
@@ -61,19 +72,16 @@ class Config:
         self.retries = getattr(args, 'retries', 3)
 
         # Vulns command options
-        self.output_format = getattr(args, 'output', 'table')
         self.columns = getattr(args, 'columns', None)
         self.vuln_details = getattr(args, 'vuln_details', False)
         self.vex_details = getattr(args, 'vex_details', False)
         self.timestamp_details = getattr(args, 'timestamp_details', False)
-        self.human_time = getattr(args, 'human_time', False)
         self.list_columns = getattr(args, 'list_columns', False)
 
         # Logging - must be set up before CI info extraction
         self.setup_logging(args)
 
         # CI/CD metadata - only for upload command
-        self.subcommand = getattr(args, 'subcommand', None)
         self._extract_ci_info(args)
 
     def setup_logging(self, args):
