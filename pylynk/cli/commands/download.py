@@ -17,7 +17,33 @@
 import json
 from pylynk.formatters.json_formatter import format_json
 from pylynk.utils.validators import parse_boolean_flag
-from pylynk.constants import CONTENT_TYPE_JSON, CONTENT_TYPE_CSV, CONTENT_TYPE_XML
+from pylynk.constants import CONTENT_TYPE_JSON, CONTENT_TYPE_CSV, CONTENT_TYPE_XML, PROCESSING_STAGE_MAP
+
+
+def _parse_wait_for(wait_for_str):
+    """
+    Parse --wait-for argument into list of GraphQL enum values.
+
+    Args:
+        wait_for_str (str): Comma-separated stage names (e.g. "vuln-scan,automation")
+
+    Returns:
+        list: GraphQL enum values, or None if input is None/empty
+    """
+    if not wait_for_str:
+        return None
+
+    stages = []
+    for stage in wait_for_str.split(','):
+        stage = stage.strip().lower()
+        if stage not in PROCESSING_STAGE_MAP:
+            valid = ', '.join(sorted(PROCESSING_STAGE_MAP.keys()))
+            print(f"Error: unknown processing stage '{stage}'")
+            print(f"Valid stages: {valid}")
+            return False
+        stages.append(PROCESSING_STAGE_MAP[stage])
+
+    return stages if stages else None
 
 
 def execute(api_client, config):
@@ -39,6 +65,11 @@ def execute(api_client, config):
     # Parse boolean flag for vulnerabilities
     include_vulns = parse_boolean_flag(config.vuln)
 
+    # Parse --wait-for stages
+    require_completed = _parse_wait_for(config.wait_for)
+    if require_completed is False:
+        return 1
+
     # Call download with resolved IDs
     content, content_type, filename = api_client.download_sbom(
         env_id=config.env_id,
@@ -51,7 +82,10 @@ def execute(api_client, config):
         original=config.original,
         exclude_parts=config.exclude_parts,
         include_support_status=config.include_support_status,
-        support_level_only=getattr(config, 'support_level_only', False)
+        support_level_only=getattr(config, 'support_level_only', False),
+        require_completed=require_completed,
+        poll_interval=config.poll_interval,
+        poll_timeout=config.poll_timeout,
     )
 
     if content is None:

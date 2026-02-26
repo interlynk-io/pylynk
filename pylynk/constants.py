@@ -52,6 +52,13 @@ STATUS_KEYS = {
     'VULN_SCAN': 'vulnScanStatus'
 }
 
+# Processing stage CLI names to GraphQL enum values
+PROCESSING_STAGE_MAP = {
+    'automation': 'AUTOMATION',
+    'vuln-scan': 'VULN_SCAN',
+    'policy-scan': 'POLICY_SCAN',
+}
+
 # SBOM Specification Types
 SBOM_SPEC_SPDX = 'SPDX'
 SBOM_SPEC_CYCLONEDX = 'CycloneDX'

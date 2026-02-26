@@ -58,8 +58,9 @@ def _get_command_examples(command):
         'upload': '''  pylynk upload --prod 'my-product' --sbom sbom.json
   pylynk upload --prod 'my-product' --env 'production' --sbom sbom.json''',
 
-        'download': '''  pylynk download --verId 'abc-123'
-  pylynk download --prod 'my-product' --env 'default' --ver 'v1.0.0'
+        'download': '''  pylynk download --prod 'my-product' --env 'default' --ver 'v1.0.0'
+  pylynk download --prod 'my-product' --env 'default' --ver 'v1.0.0' --out-file sbom.json
+  pylynk download --prod 'my-product' --env 'default' --ver 'v1.0.0' --wait-for vuln-scan,automation
   pylynk download --verId 'abc-123' --out-file sbom.json''',
 
         'vulns': '''  pylynk vulns --prod 'my-product'
@@ -261,11 +262,13 @@ Supported SBOM formats: CycloneDX (JSON/XML), SPDX (JSON/tag-value)
     # Download command
     download_epilog = '''
 Examples:
-  pylynk download --verId 'abc-123'
-  pylynk download --verId 'abc-123' --out-file sbom.json
   pylynk download --prod 'my-product' --env 'default' --ver 'v1.0.0'
-  pylynk download --verId 'abc-123' --vuln true
-  pylynk download --verId 'abc-123' --spec CycloneDX --spec-version 1.5
+  pylynk download --prod 'my-product' --env 'default' --ver 'v1.0.0' --out-file sbom.json
+  pylynk download --prod 'my-product' --env 'default' --ver 'v1.0.0' --vuln true
+  pylynk download --prod 'my-product' --env 'default' --ver 'v1.0.0' --spec CycloneDX --spec-version 1.5
+  pylynk download --prod 'my-product' --env 'default' --ver 'v1.0.0' --wait-for vuln-scan
+  pylynk download --prod 'my-product' --env 'default' --ver 'v1.0.0' --wait-for vuln-scan,automation --poll-interval 15
+  pylynk download --verId 'abc-123' --out-file sbom.json
 
 Note: Requires either --verId OR all of --prod, --env, and --ver
 '''
@@ -298,6 +301,13 @@ Note: Requires either --verId OR all of --prod, --env, and --ver
                                  help="Exclude parts from SBOM")
     download_parser.add_argument("--include-support-status", action="store_true",
                                  help="Include support status")
+    download_parser.add_argument("--wait-for", metavar='STAGES',
+                                 help="Wait for processing stages before download "
+                                      "(comma-separated: automation,vuln-scan,policy-scan)")
+    download_parser.add_argument("--poll-interval", type=int, default=10, metavar='SECS',
+                                 help="Seconds between polling attempts when using --wait-for (default: 10)")
+    download_parser.add_argument("--poll-timeout", type=int, default=300, metavar='SECS',
+                                 help="Maximum seconds to wait for processing (default: 300)")
 
     # Version command
     version_parser = subparsers.add_parser(

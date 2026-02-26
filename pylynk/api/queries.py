@@ -68,7 +68,8 @@ SBOM_DOWNLOAD = """
 query downloadSbom($projectId: Uuid!, $sbomId: Uuid!, $includeVulns: Boolean,
                    $spec: SbomSpec, $original: Boolean, $package: Boolean,
                    $lite: Boolean, $excludeParts: Boolean,
-                   $supportLevelOnly: Boolean, $includeSupportStatus: Boolean) {
+                   $supportLevelOnly: Boolean, $includeSupportStatus: Boolean,
+                   $requireCompleted: [SbomProcessingStageEnum!]) {
   sbom(projectId: $projectId, sbomId: $sbomId) {
     download(
       sbomId: $sbomId
@@ -80,10 +81,17 @@ query downloadSbom($projectId: Uuid!, $sbomId: Uuid!, $includeVulns: Boolean,
       excludeParts: $excludeParts
       supportLevelOnly: $supportLevelOnly
       includeSupportStatus: $includeSupportStatus
+      requireCompleted: $requireCompleted
     ) {
+      ready
       content
       contentType
       filename
+      processingStatus {
+        automation
+        vulnScan
+        policyScan
+      }
     }
   }
 }
@@ -93,10 +101,11 @@ query downloadSbom($projectId: Uuid!, $sbomId: Uuid!, $includeVulns: Boolean,
 SBOM_DOWNLOAD_NEW = """
 query downloadSbom($projectId: Uuid, $sbomId: Uuid, $projectName: String,
                    $projectGroupName: String, $versionName: String,
-                   $includeVulns: Boolean, $spec: SbomSpec, $original: Boolean, 
-                   $package: Boolean, $lite: Boolean, $excludeParts: Boolean, 
-                   $supportLevelOnly: Boolean, $includeSupportStatus: Boolean) {
-  sbom(projectId: $projectId, sbomId: $sbomId, projectName: $projectName, 
+                   $includeVulns: Boolean, $spec: SbomSpec, $original: Boolean,
+                   $package: Boolean, $lite: Boolean, $excludeParts: Boolean,
+                   $supportLevelOnly: Boolean, $includeSupportStatus: Boolean,
+                   $requireCompleted: [SbomProcessingStageEnum!]) {
+  sbom(projectId: $projectId, sbomId: $sbomId, projectName: $projectName,
        projectGroupName: $projectGroupName, versionName: $versionName) {
     download(
       sbomId: $sbomId
@@ -108,10 +117,17 @@ query downloadSbom($projectId: Uuid, $sbomId: Uuid, $projectName: String,
       excludeParts: $excludeParts
       supportLevelOnly: $supportLevelOnly
       includeSupportStatus: $includeSupportStatus
+      requireCompleted: $requireCompleted
     ) {
+      ready
       content
       contentType
       filename
+      processingStatus {
+        automation
+        vulnScan
+        policyScan
+      }
       __typename
     }
     __typename

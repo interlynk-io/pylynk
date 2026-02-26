@@ -67,6 +67,9 @@ class Config:
         self.exclude_parts = getattr(args, 'exclude_parts', False)
         self.include_support_status = getattr(
             args, 'include_support_status', False)
+        self.wait_for = getattr(args, 'wait_for', None)
+        self.poll_interval = getattr(args, 'poll_interval', 10)
+        self.poll_timeout = getattr(args, 'poll_timeout', 300)
 
         # Upload options
         self.retries = getattr(args, 'retries', 3)
