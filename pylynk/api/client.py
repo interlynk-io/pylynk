@@ -343,7 +343,8 @@ class LynkAPIClient:
                       spec=None, spec_version=None, lite=False,
                       dont_package_sbom=False, original=False,
                       exclude_parts=False, include_support_status=False,
-                      support_level_only=False):
+                      support_level_only=False, require_completed=None,
+                      poll_interval=10, poll_timeout=300):
         """
         Download an SBOM from the API.
 
@@ -359,6 +360,9 @@ class LynkAPIClient:
             exclude_parts (bool): Exclude parts from SBOM
             include_support_status (bool): Include support status
             support_level_only (bool): Download support level only (CSV format)
+            require_completed (list): Processing stages that must finish before download
+            poll_interval (int): Seconds between polling attempts
+            poll_timeout (int): Maximum seconds to wait for processing
 
         Returns:
             tuple: (content, content_type, filename) or (None, None, None) if error
@@ -392,53 +396,91 @@ class LynkAPIClient:
             variables["supportLevelOnly"] = support_level_only
         if include_support_status:
             variables["includeSupportStatus"] = include_support_status
+        if require_completed:
+            variables["requireCompleted"] = require_completed
 
         logging.debug("Downloading SBOM with parameters: %s", variables)
         logging.debug("GraphQL Query for download:\n%s", SBOM_DOWNLOAD)
         logging.debug("Query variables: %s", json.dumps(variables, indent=2))
 
-        response_data = self._make_request(
-            SBOM_DOWNLOAD, variables, operation_name="downloadSbom")
+        start_wait = time.time()
 
-        if not response_data:
-            return None, None, None
+        while True:
+            response_data = self._make_request(
+                SBOM_DOWNLOAD, variables, operation_name="downloadSbom")
 
-        if "errors" in response_data:
-            return None, None, None
+            if not response_data:
+                return None, None, None
 
-        data = response_data.get('data')
-        if not data:
-            print('Error: No data returned from API')
-            return None, None, None
+            if "errors" in response_data:
+                return None, None, None
 
-        sbom_data = data.get('sbom')
-        if not sbom_data:
-            print('Error: SBOM not found - check product, environment, and version')
-            return None, None, None
+            data = response_data.get('data')
+            if not data:
+                print('Error: No data returned from API')
+                return None, None, None
 
-        sbom = sbom_data.get('download', {})
+            sbom_data = data.get('sbom')
+            if not sbom_data:
+                print('Error: SBOM not found - check product, environment, and version')
+                return None, None, None
 
-        if not sbom:
-            print('No SBOM matched with the given criteria')
-            return None, None, None
+            sbom = sbom_data.get('download', {})
 
-        # Common processing for both formats
-        b64data = sbom.get('content')
-        content_type = sbom.get('contentType', 'application/json')
-        filename = sbom.get('filename', 'sbom.json')
+            if not sbom:
+                print('No SBOM matched with the given criteria')
+                return None, None, None
 
-        decoded_content = base64.b64decode(b64data)
+            # Check if processing stages are still pending
+            ready = sbom.get('ready', True)
+            if not ready and require_completed:
+                elapsed = time.time() - start_wait
+                if elapsed >= poll_timeout:
+                    print(f'Timeout: processing not finished after {int(elapsed)}s')
+                    status = sbom.get('processingStatus', {})
+                    if status:
+                        print(f'  automation: {status.get("automation", "unknown")}, '
+                              f'vuln_scan: {status.get("vulnScan", "unknown")}, '
+                              f'policy_scan: {status.get("policyScan", "unknown")}')
+                    return None, None, None
 
-        # Log download details
-        decoded_size = len(decoded_content)
-        compression_ratio = (1 - decoded_size / len(b64data)
-                             ) * 100 if b64data else 0
-        logging.debug('Download completed: base64_size=%s, decoded_size=%s, compression=%.2f%%, content_type=%s',
-                      self._format_size(
-                          len(b64data)), self._format_size(decoded_size),
-                      compression_ratio, content_type)
+                status = sbom.get('processingStatus', {})
+                status_parts = []
+                if status:
+                    status_parts = [
+                        f'automation={status.get("automation", "?")}',
+                        f'vuln_scan={status.get("vulnScan", "?")}',
+                        f'policy_scan={status.get("policyScan", "?")}',
+                    ]
+                logging.info("Processing not ready (%s), retrying in %ds... [%d/%ds]",
+                             ", ".join(status_parts), poll_interval,
+                             int(elapsed), poll_timeout)
+                print(f'Waiting for processing to complete ({", ".join(status_parts)})... '
+                      f'[{int(elapsed)}/{poll_timeout}s]')
+                time.sleep(poll_interval)
+                continue
 
-        return decoded_content.decode('utf-8'), content_type, filename
+            # Content is available
+            b64data = sbom.get('content')
+            if not b64data:
+                print('Error: No content in download response')
+                return None, None, None
+
+            content_type = sbom.get('contentType', 'application/json')
+            filename = sbom.get('filename', 'sbom.json')
+
+            decoded_content = base64.b64decode(b64data)
+
+            # Log download details
+            decoded_size = len(decoded_content)
+            compression_ratio = (1 - decoded_size / len(b64data)
+                                 ) * 100 if b64data else 0
+            logging.debug('Download completed: base64_size=%s, decoded_size=%s, compression=%.2f%%, content_type=%s',
+                          self._format_size(
+                              len(b64data)), self._format_size(decoded_size),
+                          compression_ratio, content_type)
+
+            return decoded_content.decode('utf-8'), content_type, filename
 
     def upload_sbom(self, sbom_file):
         """
