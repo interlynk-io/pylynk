@@ -26,7 +26,7 @@ from pylynk.constants import (
     STATUS_COMPLETED, STATUS_UNKNOWN, STATUS_KEYS
 )
 from pylynk.utils.validators import validate_file_exists, validate_boolean_flag, parse_boolean_flag
-from pylynk.api.queries import PRODUCTS_TOTAL_COUNT, PRODUCTS_LIST, SBOM_DOWNLOAD, SBOM_DOWNLOAD_NEW, VULNS_LIST
+from pylynk.api.queries import PRODUCTS_TOTAL_COUNT, PRODUCTS_LIST, SBOM_DOWNLOAD, SBOM_DOWNLOAD_NEW, VULNS_LIST, ATTRIBUTIONS_QUERY
 from pylynk.api.mutations import SBOM_UPLOAD
 
 
@@ -257,15 +257,50 @@ class LynkAPIClient:
         )
 
     def _fetch_context(self):
-        """Fetch full context data including all products."""
-        product_count = self._products_count.get('data', {}).get(
-            'organization', {}).get('productNodes', {}).get('prodCount', 0)
+        """Fetch full context data including all products, handling pagination."""
+        all_products = []
+        cursor = None
+        page_size = 50
 
-        return self._make_request(
-            PRODUCTS_LIST,
-            variables={"first": product_count},
-            operation_name="GetProducts"
-        )
+        while True:
+            variables = {"first": page_size}
+            if cursor:
+                variables["after"] = cursor
+
+            result = self._make_request(
+                PRODUCTS_LIST,
+                variables=variables,
+                operation_name="GetProducts"
+            )
+
+            if not result or result.get('errors'):
+                return result
+
+            product_nodes = result.get('data', {}).get('organization', {}).get(
+                'productNodes', {})
+            products = product_nodes.get('products', [])
+            all_products.extend(products)
+
+            page_info = product_nodes.get('pageInfo', {})
+            logging.debug("Products page: got %d products, pageInfo=%s", len(products), page_info)
+            if page_info.get('hasNextPage'):
+                cursor = page_info.get('endCursor')
+            else:
+                break
+
+        logging.debug("Fetched %d products across pages", len(all_products))
+
+        # Build a combined result matching the expected structure
+        return {
+            'data': {
+                'organization': {
+                    'productNodes': {
+                        'prodCount': len(all_products),
+                        'products': all_products
+                    }
+                }
+            }
+        }
 
     def get_products(self):
         """
@@ -748,6 +783,149 @@ class LynkAPIClient:
         if result and 'data' in result:
             sbom_data = result['data'].get('sbom', {})
             return sbom_data.get('vulns', {})
+
+        return None
+
+    def get_attributions(self, sbom_id, page_size=100):
+        """
+        Get all attribution data for a specific SBOM, handling pagination.
+
+        Args:
+            sbom_id (str): SBOM/Version ID
+            page_size (int): Number of results per page
+
+        Returns:
+            list: All attribution nodes, or None if error
+        """
+        all_nodes = []
+        cursor = None
+
+        while True:
+            variables = {
+                'sbomId': sbom_id,
+                'first': page_size,
+            }
+            if cursor:
+                variables['after'] = cursor
+
+            result = self._make_request(
+                ATTRIBUTIONS_QUERY, variables, 'GetAttributionsData')
+
+            if not result or 'errors' in result:
+                return None
+
+            attributions = result.get('data', {}).get('attributions', {})
+            nodes = attributions.get('nodes', [])
+            all_nodes.extend(nodes)
+
+            page_info = attributions.get('pageInfo', {})
+            if page_info.get('hasNextPage'):
+                cursor = page_info.get('endCursor')
+            else:
+                break
+
+        logging.debug("Fetched %d attribution nodes for sbom %s", len(all_nodes), sbom_id)
+        return all_nodes
+
+    def find_matching_products(self, env_name, ver_name):
+        """
+        Find all products that have a matching environment and version.
+        Uses per-product version queries to avoid missing versions due to
+        the truncated sboms list in the cached product tree.
+
+        Args:
+            env_name (str): Environment name to match
+            ver_name (str): Version name to match
+
+        Returns:
+            list: List of dicts with product_name, prod_id, env_id, ver_id
+        """
+        if not self._data:
+            return []
+
+        # Normalize env name for comparison
+        env_lower = env_name.lower() if env_name.lower() in ['default', 'development', 'production'] else env_name
+
+        # First pass: find all product/env pairs that match the environment
+        candidates = []
+        products = self._data.get('data', {}).get('organization', {}).get(
+            'productNodes', {}).get('products', [])
+
+        for prod in products:
+            for env in prod.get('environments', []):
+                if env.get('name') == env_lower:
+                    candidates.append({
+                        'product_name': prod['name'],
+                        'prod_id': prod['id'],
+                        'env_id': env['id'],
+                    })
+                    break
+
+        # Second pass: for each candidate, query versions to find the match
+        matches = []
+        for candidate in candidates:
+            ver_id = self._find_version_by_name(
+                candidate['env_id'], ver_name)
+            if ver_id:
+                candidate['ver_id'] = ver_id
+                matches.append(candidate)
+
+        return matches
+
+    def _find_version_by_name(self, env_id, ver_name):
+        """
+        Search for a version by name within an environment using paginated API query.
+
+        Args:
+            env_id (str): Environment/Project ID
+            ver_name (str): Version name to find
+
+        Returns:
+            str: Version ID if found, None otherwise
+        """
+        query = """
+        query FindVersion($id: Uuid!, $first: Int, $after: String,
+                          $search: String,
+                          $field: SbomOrderByFields!, $direction: OrderByDirection!) {
+          project(id: $id) {
+            sbomVersions(
+              first: $first
+              after: $after
+              search: $search
+              orderBy: { field: $field, direction: $direction }
+            ) {
+              nodes {
+                id
+                primaryComponent {
+                  version
+                }
+              }
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
+            }
+          }
+        }
+        """
+        # Use search to narrow results server-side
+        variables = {
+            'id': env_id,
+            'first': 50,
+            'search': ver_name,
+            'field': 'SBOMS_UPDATED_AT',
+            'direction': 'DESC',
+        }
+
+        result = self._make_request(query, variables, 'FindVersion')
+        if not result or 'errors' in result:
+            return None
+
+        sbom_versions = result.get('data', {}).get('project', {}).get('sbomVersions', {})
+        for node in sbom_versions.get('nodes', []):
+            pc = node.get('primaryComponent', {})
+            if pc and pc.get('version') == ver_name:
+                return node['id']
 
         return None
 

@@ -74,6 +74,12 @@ class Config:
         # Upload options
         self.retries = getattr(args, 'retries', 3)
 
+        # Report command options
+        self.report_type = getattr(args, 'report_type', None)
+        self.include_license_text = getattr(args, 'include_license_text', False)
+        if self.subcommand == 'report':
+            self.output_file = getattr(args, 'output_file', None)
+
         # Vulns command options
         self.columns = getattr(args, 'columns', None)
         self.vuln_details = getattr(args, 'vuln_details', False)

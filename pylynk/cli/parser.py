@@ -67,6 +67,11 @@ def _get_command_examples(command):
   pylynk vulns --prod 'my-product' --env 'production'
   pylynk vulns --prod 'my-product' --vuln-details --vex-details
   pylynk vulns --list-columns''',
+
+        'report': '''  pylynk report --type attribution --prod 'my-product' --env 'production' --ver 'v1.0.0'
+  pylynk report --type attribution --env 'production' --ver 'v1.0.0'
+  pylynk report --type attribution --prod 'my-product' --env 'default' --ver 'v1.0.0' --include-license-text
+  pylynk report --type attribution --prod 'my-product' --env 'default' --ver 'v1.0.0' --output-file report.csv''',
     }
     return examples.get(command)
 
@@ -153,6 +158,7 @@ Examples:
   pylynk upload --prod 'my-product' --sbom s.json Upload an SBOM
   pylynk download --verId 'abc-123'               Download an SBOM
   pylynk vulns --prod 'my-product'                List vulnerabilities
+  pylynk report --type attribution --prod 'p' --env 'default' --ver 'v1.0'
 
 Environment Variables:
   INTERLYNK_SECURITY_TOKEN    Authentication token (required)
@@ -355,6 +361,35 @@ Column Groups:
                               help="List available column names and exit")
     add_output_format_group(vulns_parser)
     add_human_time_argument(vulns_parser)
+
+    # Report command
+    report_epilog = '''
+Examples:
+  pylynk report --type attribution --prod 'my-product' --env 'production' --ver 'v1.0.0'
+  pylynk report --type attribution --env 'production' --ver 'v1.0.0'
+  pylynk report --type attribution --prod 'my-product' --env 'default' --ver 'v1.0.0' --include-license-text
+  pylynk report --type attribution --prod 'my-product' --env 'default' --ver 'v1.0.0' --output-file report.csv
+
+Note: If --prod is omitted, reports are generated for all products matching --env and --ver.
+'''
+    report_parser = subparsers.add_parser(
+        "report",
+        help="Generate reports",
+        description="Generate reports from the Interlynk platform.",
+        epilog=report_epilog,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        parents=[_create_base_parser()]
+    )
+    report_parser.add_argument("--type", required=True, choices=['attribution'],
+                               dest="report_type",
+                               help="Report type to generate")
+    add_product_arguments(report_parser, required=False)
+    add_environment_argument(report_parser)
+    add_version_arguments(report_parser)
+    report_parser.add_argument("--include-license-text", action='store_true',
+                               help="Include full license text in output")
+    report_parser.add_argument("--output-file", metavar='FILE',
+                               help="Output file path (default: attribution_<product>.csv)")
 
     return parser
 
