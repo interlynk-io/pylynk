@@ -827,48 +827,56 @@ class LynkAPIClient:
         logging.debug("Fetched %d attribution nodes for sbom %s", len(all_nodes), sbom_id)
         return all_nodes
 
-    def find_matching_products(self, env_name, ver_name):
+    def find_all_products_best_version(self):
         """
-        Find all products that have a matching environment and version.
-        Uses per-product version queries to avoid missing versions due to
-        the truncated sboms list in the cached product tree.
-
-        Args:
-            env_name (str): Environment name to match
-            ver_name (str): Version name to match
+        Find the best version for every product using environment and version
+        waterfall logic:
+          Environments: production -> development -> default
+          Versions: main (exact match) -> first available
 
         Returns:
-            list: List of dicts with product_name, prod_id, env_id, ver_id
+            list: List of dicts with product_name, prod_id, env_id, env_name, ver_id
         """
         if not self._data:
             return []
 
-        # Normalize env name for comparison
-        env_lower = env_name.lower() if env_name.lower() in ['default', 'development', 'production'] else env_name
+        env_priority = ['production', 'development', 'default']
 
-        # First pass: find all product/env pairs that match the environment
-        candidates = []
         products = self._data.get('data', {}).get('organization', {}).get(
             'productNodes', {}).get('products', [])
 
+        matches = []
         for prod in products:
+            # Build env lookup for this product
+            env_map = {}
             for env in prod.get('environments', []):
-                if env.get('name') == env_lower:
-                    candidates.append({
+                env_map[env.get('name', '').lower()] = env
+
+            # Try environments in priority order
+            found = False
+            for env_name in env_priority:
+                env = env_map.get(env_name)
+                if not env:
+                    continue
+
+                # Try 'main' first, then fall back to first available
+                ver_id = self._find_version_by_name(env['id'], 'main')
+                if not ver_id:
+                    ver_id = self._find_first_version(env['id'])
+
+                if ver_id:
+                    matches.append({
                         'product_name': prod['name'],
                         'prod_id': prod['id'],
                         'env_id': env['id'],
+                        'env_name': env_name,
+                        'ver_id': ver_id,
                     })
+                    found = True
                     break
 
-        # Second pass: for each candidate, query versions to find the match
-        matches = []
-        for candidate in candidates:
-            ver_id = self._find_version_by_name(
-                candidate['env_id'], ver_name)
-            if ver_id:
-                candidate['ver_id'] = ver_id
-                matches.append(candidate)
+            if not found:
+                logging.debug("No version found for product '%s' in any environment", prod['name'])
 
         return matches
 
@@ -926,6 +934,48 @@ class LynkAPIClient:
             pc = node.get('primaryComponent', {})
             if pc and pc.get('version') == ver_name:
                 return node['id']
+
+        return None
+
+    def _find_first_version(self, env_id):
+        """
+        Get the first (most recent) version in an environment.
+
+        Args:
+            env_id (str): Environment/Project ID
+
+        Returns:
+            str: Version ID if found, None otherwise
+        """
+        query = """
+        query FindFirstVersion($id: Uuid!, $first: Int,
+                               $field: SbomOrderByFields!, $direction: OrderByDirection!) {
+          project(id: $id) {
+            sbomVersions(
+              first: $first
+              orderBy: { field: $field, direction: $direction }
+            ) {
+              nodes {
+                id
+              }
+            }
+          }
+        }
+        """
+        variables = {
+            'id': env_id,
+            'first': 1,
+            'field': 'SBOMS_UPDATED_AT',
+            'direction': 'DESC',
+        }
+
+        result = self._make_request(query, variables, 'FindFirstVersion')
+        if not result or 'errors' in result:
+            return None
+
+        nodes = result.get('data', {}).get('project', {}).get('sbomVersions', {}).get('nodes', [])
+        if nodes:
+            return nodes[0]['id']
 
         return None
 

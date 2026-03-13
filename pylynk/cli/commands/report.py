@@ -56,19 +56,19 @@ def _execute_attribution(api_client, config):
 
 
 def _execute_attribution_all_products(api_client, config):
-    """Generate attribution reports for all products matching env+ver."""
-    matches = api_client.find_matching_products(config.env, config.ver)
+    """Generate attribution reports for all products using env/version waterfall."""
+    matches = api_client.find_all_products_best_version()
 
     if not matches:
-        print(f"No products found matching env='{config.env}' ver='{config.ver}'")
+        print("No products found with any available versions")
         return 1
 
     # Confirm with user
-    print(f"Found {len(matches)} product(s) matching env='{config.env}' ver='{config.ver}':")
+    print(f"Found {len(matches)} product(s):")
     for m in matches:
-        print(f"  - {m['product_name']}")
+        print(f"  - {m['product_name']} (env: {m['env_name']})")
 
-    response = input(f"\nGenerate attribution report for all {len(matches)} product(s)? [y/N] ")
+    response = input(f"\nGenerate attribution reports for all {len(matches)} product(s)? [y/N] ")
     if response.strip().lower() not in ('y', 'yes'):
         print("Aborted.")
         return 0

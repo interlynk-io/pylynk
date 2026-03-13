@@ -68,10 +68,10 @@ def _get_command_examples(command):
   pylynk vulns --prod 'my-product' --vuln-details --vex-details
   pylynk vulns --list-columns''',
 
-        'report': '''  pylynk report --type attribution --prod 'my-product' --env 'production' --ver 'v1.0.0'
-  pylynk report --type attribution --env 'production' --ver 'v1.0.0'
-  pylynk report --type attribution --prod 'my-product' --env 'default' --ver 'v1.0.0' --include-license-text
-  pylynk report --type attribution --prod 'my-product' --env 'default' --ver 'v1.0.0' --output-file report.csv''',
+        'report': '''  pylynk report --type attribution
+  pylynk report --type attribution --output-file report.csv
+  pylynk report --type attribution --prod 'my-product' --env 'production' --ver 'v1.0.0'
+  pylynk report --type attribution --prod 'my-product' --env 'default' --ver 'v1.0.0' --include-license-text''',
     }
     return examples.get(command)
 
@@ -366,11 +366,12 @@ Column Groups:
     report_epilog = '''
 Examples:
   pylynk report --type attribution --prod 'my-product' --env 'production' --ver 'v1.0.0'
-  pylynk report --type attribution --env 'production' --ver 'v1.0.0'
+  pylynk report --type attribution
   pylynk report --type attribution --prod 'my-product' --env 'default' --ver 'v1.0.0' --include-license-text
   pylynk report --type attribution --prod 'my-product' --env 'default' --ver 'v1.0.0' --output-file report.csv
 
-Note: If --prod is omitted, reports are generated for all products matching --env and --ver.
+Note: If --prod is omitted, auto-selects best env (production > development > default)
+      and best version (main, or most recent) for every product.
 '''
     report_parser = subparsers.add_parser(
         "report",
@@ -385,7 +386,7 @@ Note: If --prod is omitted, reports are generated for all products matching --en
                                help="Report type to generate")
     add_product_arguments(report_parser, required=False)
     add_environment_argument(report_parser)
-    add_version_arguments(report_parser)
+    add_version_arguments(report_parser, required=False)
     report_parser.add_argument("--include-license-text", action='store_true',
                                help="Include full license text in output")
     report_parser.add_argument("--output-file", metavar='FILE',
