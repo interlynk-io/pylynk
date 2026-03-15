@@ -47,18 +47,17 @@ def main():
     if args.subcommand == "vulns" and getattr(config, 'list_columns', False):
         return vulns.execute(None, config)
     
-    # Determine if we need full initialization
-    needs_full_init = True
-    
-    # For upload, check if we can use minimal init
-    if args.subcommand == "upload":
-        # Upload can use minimal init since the server handles name resolution
-        needs_full_init = False
-    elif args.subcommand == "report":
-        # Report always needs full init to resolve identifiers
-        needs_full_init = True
-    elif args.subcommand == "download":
-        # Validate download parameters early
+    # Only 'prods' needs full initialization (fetches all products)
+    # All other commands use minimal init + targeted queries
+    if args.subcommand == "prods":
+        if not api_client.initialize():
+            return 1
+    else:
+        if not api_client.initialize_minimal():
+            return 1
+
+    # Validate download parameters early
+    if args.subcommand == "download":
         has_id_params = bool(config.ver_id)
         has_name_params = all([config.prod, config.env, config.ver])
 
@@ -75,18 +74,6 @@ def main():
             print("  pylynk download --prod 'my-product' --env 'default' --ver 'v1.0.0'")
             print()
             print("For more information: pylynk download --help")
-            return 1
-
-        # Download needs full init when using names to resolve to IDs
-        # Only use minimal init when verId is provided directly
-        needs_full_init = not has_id_params
-    
-    # Initialize API client
-    if needs_full_init:
-        if not api_client.initialize():
-            return 1
-    else:
-        if not api_client.initialize_minimal():
             return 1
     
     # Execute the appropriate command

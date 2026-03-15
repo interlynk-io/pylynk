@@ -31,12 +31,11 @@ query GetProductsCount($name: String, $enabled: Boolean) {
 
 # Query to get the list of products with details
 PRODUCTS_LIST = """
-query GetProducts($first: Int, $after: String) {
+query GetProducts($first: Int) {
   organization {
     productNodes: projectGroups(
       enabled: true
       first: $first
-      after: $after
       orderBy: { field: PROJECT_GROUPS_UPDATED_AT, direction: DESC }
     ) {
       prodCount: totalCount
@@ -58,10 +57,6 @@ query GetProducts($first: Int, $after: String) {
             }
           }
         }
-      }
-      pageInfo {
-        hasNextPage
-        endCursor
       }
     }
   }
@@ -140,6 +135,38 @@ query downloadSbom($projectId: Uuid, $sbomId: Uuid, $projectName: String,
 }
 """
 
+# Query to find a product by name (targeted, avoids fetching all products)
+PRODUCT_BY_NAME = """
+query GetProductByName($name: String!, $first: Int) {
+  organization {
+    productNodes: projectGroups(
+      search: $name
+      enabled: true
+      first: $first
+    ) {
+      products: nodes {
+        id
+        name
+        environments: projects {
+          id
+          name
+          versions: sboms {
+            id
+            vulnRunStatus
+            createdAt
+            updatedAt
+            primaryComponent {
+              name
+              version
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
 # Query to get a specific product by ID
 PRODUCT_BY_ID = """
 query GetProductById($id: ID!) {
@@ -162,8 +189,63 @@ query GetProductById($id: ID!) {
 }
 """
 
-# Query to get attribution data for a specific SBOM
+# Query to get attribution data for a specific SBOM (without license text)
 ATTRIBUTIONS_QUERY = """
+query GetAttributionsData($sbomId: Uuid!, $internal: Boolean, $primary: Boolean,
+    $licenseType: AttributionLicenseTypeEnum, $includeParts: Boolean,
+    $dedupe: Boolean, $search: String, $orderBy: AttributionComponentOrderByInput,
+    $first: Int, $last: Int, $after: String, $before: String,
+    $licenses: [String!], $direct: Boolean, $partIds: [Uuid!], $ids: [ID!]) {
+  attributions(
+    sbomId: $sbomId
+    internal: $internal
+    primary: $primary
+    licenseType: $licenseType
+    licenses: $licenses
+    includeParts: $includeParts
+    direct: $direct
+    partIds: $partIds
+    dedupe: $dedupe
+    search: $search
+    orderBy: $orderBy
+    first: $first
+    last: $last
+    after: $after
+    before: $before
+    ids: $ids
+  ) {
+    totalCount
+    nodes {
+      id
+      attribution {
+        licensesExp
+        declaredLicensesExp
+        copyright
+        notice
+      }
+      components {
+        id
+        name
+        version
+        sbomId
+        patches {
+          url
+          content
+        }
+      }
+    }
+    pageInfo {
+      endCursor
+      hasNextPage
+      hasPreviousPage
+      startCursor
+    }
+  }
+}
+"""
+
+# Query to get attribution data with license text included
+ATTRIBUTIONS_WITH_TEXT_QUERY = """
 query GetAttributionsData($sbomId: Uuid!, $internal: Boolean, $primary: Boolean,
     $licenseType: AttributionLicenseTypeEnum, $includeParts: Boolean,
     $dedupe: Boolean, $search: String, $orderBy: AttributionComponentOrderByInput,

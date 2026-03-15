@@ -68,10 +68,10 @@ def _get_command_examples(command):
   pylynk vulns --prod 'my-product' --vuln-details --vex-details
   pylynk vulns --list-columns''',
 
-        'report': '''  pylynk report --type attribution
-  pylynk report --type attribution --output-file report.csv
-  pylynk report --type attribution --prod 'my-product' --env 'production' --ver 'v1.0.0'
-  pylynk report --type attribution --prod 'my-product' --env 'default' --ver 'v1.0.0' --include-license-text''',
+        'report': '''  pylynk report --type attribution --prod 'my-product' --env 'production' --ver 'v1.0.0'
+  pylynk report --type attribution --prod 'my-product' --env 'production'
+  pylynk report --type attribution --prod 'my-product' --env 'default' --ver 'v1.0.0' --include-license-text
+  pylynk report --type attribution --prod 'my-product' --env 'default' --ver 'v1.0.0' --output-file report.csv''',
     }
     return examples.get(command)
 
@@ -238,7 +238,7 @@ Note: Requires either --verId OR both --ver and --env
     )
     add_product_arguments(status_parser)
     add_environment_argument(status_parser)
-    add_version_arguments(status_parser)
+    add_version_arguments(status_parser, required=False)
     add_output_format_group(status_parser, include_csv=False)
 
     # Upload command
@@ -366,12 +366,10 @@ Column Groups:
     report_epilog = '''
 Examples:
   pylynk report --type attribution --prod 'my-product' --env 'production' --ver 'v1.0.0'
-  pylynk report --type attribution
   pylynk report --type attribution --prod 'my-product' --env 'default' --ver 'v1.0.0' --include-license-text
   pylynk report --type attribution --prod 'my-product' --env 'default' --ver 'v1.0.0' --output-file report.csv
 
-Note: If --prod is omitted, auto-selects best env (production > development > default)
-      and best version (main, or most recent) for every product.
+Note: If --ver is omitted, the latest version is used automatically.
 '''
     report_parser = subparsers.add_parser(
         "report",
@@ -384,7 +382,7 @@ Note: If --prod is omitted, auto-selects best env (production > development > de
     report_parser.add_argument("--type", required=True, choices=['attribution'],
                                dest="report_type",
                                help="Report type to generate")
-    add_product_arguments(report_parser, required=False)
+    add_product_arguments(report_parser, required=True)
     add_environment_argument(report_parser)
     add_version_arguments(report_parser, required=False)
     report_parser.add_argument("--include-license-text", action='store_true',

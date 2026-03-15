@@ -30,7 +30,8 @@ def execute(api_client, config):
     Returns:
         int: Exit code (0 for success, 1 for error)
     """
-    if not api_client.resolve_identifiers():
+    if not api_client.resolve_product_env(config.prod, config.env, config.ver):
+        print('Could not resolve product, environment, or version')
         return 1
 
     # Get status based on version's vulnerability status

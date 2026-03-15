@@ -16,7 +16,6 @@
 
 import csv
 import logging
-import os
 import re
 import sys
 
@@ -41,96 +40,32 @@ def execute(api_client, config):
 
 def _execute_attribution(api_client, config):
     """Execute the attribution report."""
-    if config.prod:
-        # Single product mode
-        if not api_client.resolve_identifiers():
-            return 1
-        logging.debug("Resolved: prod_id=%s, env_id=%s, ver_id=%s",
-                      config.prod_id, config.env_id, config.ver_id)
-        return _generate_attribution_report(
-            api_client, config, config.prod, config.ver_id, config.output_file,
-            include_product=True)
-    else:
-        # All products mode
-        return _execute_attribution_all_products(api_client, config)
-
-
-def _execute_attribution_all_products(api_client, config):
-    """Generate attribution reports for all products using env/version waterfall."""
-    matches = api_client.find_all_products_best_version()
-
-    if not matches:
-        print("No products found with any available versions")
+    # Resolve product, environment, and version with a targeted query
+    # If --ver is omitted, the latest version (by createdAt) is auto-selected
+    if not api_client.resolve_product_env(config.prod, config.env, config.ver):
+        print(f"Error: Could not resolve product '{config.prod}', environment '{config.env or 'default'}'"
+              + (f", or version '{config.ver}'" if config.ver else ""))
         return 1
 
-    # Confirm with user
-    print(f"Found {len(matches)} product(s):")
-    for m in matches:
-        print(f"  - {m['product_name']} (env: {m['env_name']})")
-
-    response = input(f"\nGenerate attribution reports for all {len(matches)} product(s)? [y/N] ")
-    if response.strip().lower() not in ('y', 'yes'):
-        print("Aborted.")
-        return 0
-
-    import time as _time
-
-    all_rows = []
-    errors = 0
-    total = len(matches)
-    for i, m in enumerate(matches, 1):
-        print(f"[{i}/{total}] Fetching '{m['product_name']}'...", end=' ', flush=True)
-        start = _time.time()
-        nodes = api_client.get_attributions(m['ver_id'])
-        elapsed = _time.time() - start
-        if nodes is None:
-            print(f"FAILED ({elapsed:.1f}s)")
-            errors += 1
-            continue
-        rows = _flatten_attribution_nodes(nodes, config.include_license_text)
-        for row in rows:
-            row['Product'] = m['product_name']
-        all_rows.extend(rows)
-        print(f"done ({len(rows)} rows, {elapsed:.1f}s)")
-
-    if errors and not all_rows:
-        print(f"All {errors} product(s) failed")
+    if not config.ver_id:
+        print(f"Error: No versions found for '{config.prod}' in '{config.env}'")
         return 1
 
-    output_file = config.output_file or 'attribution_report.csv'
-    _write_csv(all_rows, output_file, config.include_license_text, include_product=True)
+    logging.debug("Resolved: prod_id=%s, env_id=%s, ver_id=%s",
+                  config.prod_id, config.env_id, config.ver_id)
 
-    if errors:
-        print(f"{errors} of {len(matches)} products failed")
-        return 1
-
-    return 0
-
-
-def _generate_attribution_report(api_client, config, product_name, ver_id, output_file,
-                                  include_product=False):
-    """
-    Fetch attribution data and write CSV for a single product.
-
-    Returns:
-        int: 0 for success, 1 for error
-    """
-    nodes = api_client.get_attributions(ver_id)
+    nodes = api_client.get_attributions(config.ver_id, include_license_text=config.include_license_text)
 
     if nodes is None:
-        print(f"Error: Failed to fetch attribution data for '{product_name}'")
+        print(f"Error: Failed to fetch attribution data for '{config.prod}'")
         return 1
 
     if not nodes:
-        print(f"No attribution data found for '{product_name}'")
+        print(f"No attribution data found for '{config.prod}'")
         return 0
 
     rows = _flatten_attribution_nodes(nodes, config.include_license_text)
-    if include_product:
-        for row in rows:
-            row['Product'] = product_name
-
-    _write_csv(rows, output_file, config.include_license_text, include_product=include_product)
+    _write_csv(rows, config.output_file, config.include_license_text)
     return 0
 
 
@@ -202,16 +137,13 @@ def _flatten_attribution_nodes(nodes, include_license_text):
     return rows
 
 
-def _write_csv(rows, output_file, include_license_text, include_product=False):
+def _write_csv(rows, output_file, include_license_text):
     """Write rows to CSV file or stdout."""
-    headers = []
-    if include_product:
-        headers.append('Product')
-    headers.extend([
+    headers = [
         'Component Name', 'Component Version',
         'Declared Licenses', 'Licenses',
         'Copyright', 'Notice',
-    ])
+    ]
     if include_license_text:
         headers.append('License Texts')
 

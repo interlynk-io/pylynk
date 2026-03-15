@@ -40,30 +40,17 @@ def execute(api_client, config):
         _print_available_columns()
         return 0
 
-    # Resolve product/environment identifiers
-    if not api_client.resolve_identifiers():
+    # Resolve product/environment/version (latest picked if --ver omitted)
+    if not api_client.resolve_product_env(config.prod, config.env, config.ver):
+        print('Could not resolve product, environment, or version')
         return 1
 
-    # Get project_id (env_id)
-    project_id = getattr(config, 'env_id', None)
-    if not project_id:
-        print('Error: Could not resolve environment identifier')
+    if not config.ver_id:
+        print('Error: No versions found for this product/environment')
         return 1
-
-    # Get sbom_id - if not specified, use the latest version
-    sbom_id = getattr(config, 'ver_id', None)
-    if not sbom_id:
-        # Get latest version for this product/environment
-        versions = api_client.get_versions(config.prod_id, project_id)
-        if versions:
-            # Versions are sorted by updatedAt DESC, take the first one
-            sbom_id = versions[0]['id']
-        else:
-            print('Error: No versions found for this product/environment')
-            return 1
 
     # Fetch vulnerabilities
-    vulns_data = api_client.get_vulnerabilities(project_id, sbom_id)
+    vulns_data = api_client.get_vulnerabilities(config.env_id, config.ver_id)
 
     if not vulns_data or not vulns_data.get('nodes'):
         print('No vulnerabilities found')
