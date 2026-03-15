@@ -96,8 +96,10 @@ def add_human_time_argument(parser):
     Args:
         parser: Argument parser or subparser
     """
-    parser.add_argument("--human-time", action='store_true',
-                        help="Show timestamps in human-friendly format (e.g., '2 days ago')")
+    parser.add_argument("--human-time", action='store_true', default=True,
+                        help="Show timestamps in human-friendly format (default: enabled)")
+    parser.add_argument("--no-human-time", action='store_false', dest='human_time',
+                        help="Show timestamps in raw ISO format")
 
 
 def add_common_arguments(parser):

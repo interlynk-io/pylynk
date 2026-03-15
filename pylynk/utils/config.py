@@ -56,7 +56,7 @@ class Config:
 
         self.vuln = getattr(args, 'vuln', None)
         # Human-friendly time format for all commands with timestamps
-        self.human_time = getattr(args, 'human_time', False)
+        self.human_time = getattr(args, 'human_time', True)
 
         # Download options
         self.spec = getattr(args, 'spec', None)
