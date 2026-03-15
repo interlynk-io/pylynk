@@ -32,7 +32,7 @@ def execute(api_client, config):
     Returns:
         int: Exit code (0 for success, 1 for error)
     """
-    products = api_client.get_products()
+    products = api_client.get_products_lite()
 
     if not products:
         print("No products found")

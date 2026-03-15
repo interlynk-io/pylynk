@@ -63,6 +63,31 @@ query GetProducts($first: Int) {
 }
 """
 
+# Lightweight query for listing products (no nested environments/versions)
+PRODUCTS_LIST_LITE = """
+query GetProductsLite($first: Int) {
+  organization {
+    productNodes: projectGroups(
+      enabled: true
+      first: $first
+      orderBy: { field: PROJECT_GROUPS_UPDATED_AT, direction: DESC }
+    ) {
+      prodCount: totalCount
+      products: nodes {
+        id
+        name
+        updatedAt
+        environments: projects {
+          versions: sboms {
+            id
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
 # Query to download an SBOM (current server format)
 SBOM_DOWNLOAD = """
 query downloadSbom($projectId: Uuid!, $sbomId: Uuid!, $includeVulns: Boolean,

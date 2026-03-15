@@ -26,7 +26,7 @@ from pylynk.constants import (
     STATUS_COMPLETED, STATUS_UNKNOWN, STATUS_KEYS
 )
 from pylynk.utils.validators import validate_file_exists, validate_boolean_flag, parse_boolean_flag
-from pylynk.api.queries import PRODUCTS_TOTAL_COUNT, PRODUCTS_LIST, SBOM_DOWNLOAD, SBOM_DOWNLOAD_NEW, VULNS_LIST, ATTRIBUTIONS_QUERY, ATTRIBUTIONS_WITH_TEXT_QUERY, PRODUCT_BY_NAME
+from pylynk.api.queries import PRODUCTS_TOTAL_COUNT, PRODUCTS_LIST, PRODUCTS_LIST_LITE, SBOM_DOWNLOAD, SBOM_DOWNLOAD_NEW, VULNS_LIST, ATTRIBUTIONS_QUERY, ATTRIBUTIONS_WITH_TEXT_QUERY, PRODUCT_BY_NAME
 from pylynk.api.mutations import SBOM_UPLOAD
 
 
@@ -279,6 +279,47 @@ class LynkAPIClient:
             return []
 
         prod_nodes = self._data['data']['organization']['productNodes']['products']
+        prod_list = []
+
+        for prod in prod_nodes:
+            versions = sum(len(env['versions'])
+                           for env in prod['environments'])
+            prod_list.append({
+                'name': prod['name'],
+                'updatedAt': prod['updatedAt'],
+                'id': prod['id'],
+                'versions': versions
+            })
+
+        return prod_list
+
+    def get_products_lite(self):
+        """
+        Get list of all products using a lightweight query.
+        Only fetches fields needed for product listing.
+
+        Returns:
+            list: List of product dictionaries
+        """
+        # First get the count
+        count_data = self._fetch_product_count()
+        if not count_data or count_data.get('errors'):
+            return []
+
+        product_count = count_data.get('data', {}).get(
+            'organization', {}).get('productNodes', {}).get('prodCount', 0)
+
+        # Fetch with lite query
+        result = self._make_request(
+            PRODUCTS_LIST_LITE,
+            variables={"first": product_count},
+            operation_name="GetProductsLite"
+        )
+
+        if not result or result.get('errors'):
+            return []
+
+        prod_nodes = result['data']['organization']['productNodes']['products']
         prod_list = []
 
         for prod in prod_nodes:

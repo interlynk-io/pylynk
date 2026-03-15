@@ -47,14 +47,9 @@ def main():
     if args.subcommand == "vulns" and getattr(config, 'list_columns', False):
         return vulns.execute(None, config)
     
-    # Only 'prods' needs full initialization (fetches all products)
-    # All other commands use minimal init + targeted queries
-    if args.subcommand == "prods":
-        if not api_client.initialize():
-            return 1
-    else:
-        if not api_client.initialize_minimal():
-            return 1
+    # All commands use minimal init + targeted queries
+    if not api_client.initialize_minimal():
+        return 1
 
     # Validate download parameters early
     if args.subcommand == "download":
