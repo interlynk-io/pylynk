@@ -77,6 +77,12 @@ python3 pylynk.py download --prod 'my-product' --verId 'version-id' --out-file s
 python3 pylynk.py vulns --prod 'my-product' --env 'production'
 ```
 
+### Generate an Attribution Report
+
+```bash
+python3 pylynk.py report --type attribution --prod 'my-product' --output-file attribution.csv
+```
+
 ### Using Docker
 
 ```bash
@@ -101,6 +107,7 @@ docker run -e INTERLYNK_SECURITY_TOKEN=$INTERLYNK_SECURITY_TOKEN \
 | `upload` | Upload an SBOM | [docs/upload.md](docs/upload.md) |
 | `download` | Download an SBOM | [docs/download.md](docs/download.md) |
 | `vulns` | List vulnerabilities | [docs/vulns.md](docs/vulns.md) |
+| `report` | Generate reports (e.g., attribution) | [docs/report.md](docs/report.md) |
 | `version` | Show pylynk version | - |
 
 ## Output Formats
