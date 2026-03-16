@@ -59,7 +59,8 @@ def execute(api_client, config):
     """
     # If using names instead of IDs, resolve them first
     if not config.ver_id and config.prod and config.env and config.ver:
-        if not api_client.resolve_identifiers():
+        if not api_client.resolve_product_env(config.prod, config.env, config.ver):
+            print('Could not resolve product, environment, or version')
             return 1
 
     # Parse boolean flag for vulnerabilities

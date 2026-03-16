@@ -67,6 +67,11 @@ def _get_command_examples(command):
   pylynk vulns --prod 'my-product' --env 'production'
   pylynk vulns --prod 'my-product' --vuln-details --vex-details
   pylynk vulns --list-columns''',
+
+        'report': '''  pylynk report --type attribution --prod 'my-product' --env 'production' --ver 'v1.0.0'
+  pylynk report --type attribution --prod 'my-product' --env 'production'
+  pylynk report --type attribution --prod 'my-product' --env 'default' --ver 'v1.0.0' --include-license-text
+  pylynk report --type attribution --prod 'my-product' --env 'default' --ver 'v1.0.0' --output-file report.csv''',
     }
     return examples.get(command)
 
@@ -91,8 +96,10 @@ def add_human_time_argument(parser):
     Args:
         parser: Argument parser or subparser
     """
-    parser.add_argument("--human-time", action='store_true',
-                        help="Show timestamps in human-friendly format (e.g., '2 days ago')")
+    parser.add_argument("--human-time", action='store_true', default=True,
+                        help="Show timestamps in human-friendly format (default: enabled)")
+    parser.add_argument("--no-human-time", action='store_false', dest='human_time',
+                        help="Show timestamps in raw ISO format")
 
 
 def add_common_arguments(parser):
@@ -153,6 +160,7 @@ Examples:
   pylynk upload --prod 'my-product' --sbom s.json Upload an SBOM
   pylynk download --verId 'abc-123'               Download an SBOM
   pylynk vulns --prod 'my-product'                List vulnerabilities
+  pylynk report --type attribution --prod 'p' --env 'default' --ver 'v1.0'
 
 Environment Variables:
   INTERLYNK_SECURITY_TOKEN    Authentication token (required)
@@ -232,7 +240,7 @@ Note: Requires either --verId OR both --ver and --env
     )
     add_product_arguments(status_parser)
     add_environment_argument(status_parser)
-    add_version_arguments(status_parser)
+    add_version_arguments(status_parser, required=False)
     add_output_format_group(status_parser, include_csv=False)
 
     # Upload command
@@ -355,6 +363,34 @@ Column Groups:
                               help="List available column names and exit")
     add_output_format_group(vulns_parser)
     add_human_time_argument(vulns_parser)
+
+    # Report command
+    report_epilog = '''
+Examples:
+  pylynk report --type attribution --prod 'my-product' --env 'production' --ver 'v1.0.0'
+  pylynk report --type attribution --prod 'my-product' --env 'default' --ver 'v1.0.0' --include-license-text
+  pylynk report --type attribution --prod 'my-product' --env 'default' --ver 'v1.0.0' --output-file report.csv
+
+Note: If --ver is omitted, the latest version is used automatically.
+'''
+    report_parser = subparsers.add_parser(
+        "report",
+        help="Generate reports",
+        description="Generate reports from the Interlynk platform.",
+        epilog=report_epilog,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        parents=[_create_base_parser()]
+    )
+    report_parser.add_argument("--type", required=True, choices=['attribution'],
+                               dest="report_type",
+                               help="Report type to generate")
+    add_product_arguments(report_parser, required=True)
+    add_environment_argument(report_parser)
+    add_version_arguments(report_parser, required=False)
+    report_parser.add_argument("--include-license-text", action='store_true',
+                               help="Include full license text in output")
+    report_parser.add_argument("--output-file", metavar='FILE',
+                               help="Output file path (default: attribution_<product>.csv)")
 
     return parser
 

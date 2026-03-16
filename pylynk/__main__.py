@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pylynk.cli.parser import create_parser
 from pylynk.utils.config import Config
 from pylynk.api.client import LynkAPIClient
-from pylynk.cli.commands import products, versions, status, upload, download, version, vulns
+from pylynk.cli.commands import products, versions, status, upload, download, version, vulns, report
 
 
 def main():
@@ -47,15 +47,12 @@ def main():
     if args.subcommand == "vulns" and getattr(config, 'list_columns', False):
         return vulns.execute(None, config)
     
-    # Determine if we need full initialization
-    needs_full_init = True
-    
-    # For upload, check if we can use minimal init
-    if args.subcommand == "upload":
-        # Upload can use minimal init since the server handles name resolution
-        needs_full_init = False
-    elif args.subcommand == "download":
-        # Validate download parameters early
+    # All commands use minimal init + targeted queries
+    if not api_client.initialize_minimal():
+        return 1
+
+    # Validate download parameters early
+    if args.subcommand == "download":
         has_id_params = bool(config.ver_id)
         has_name_params = all([config.prod, config.env, config.ver])
 
@@ -73,18 +70,6 @@ def main():
             print()
             print("For more information: pylynk download --help")
             return 1
-
-        # Download needs full init when using names to resolve to IDs
-        # Only use minimal init when verId is provided directly
-        needs_full_init = not has_id_params
-    
-    # Initialize API client
-    if needs_full_init:
-        if not api_client.initialize():
-            return 1
-    else:
-        if not api_client.initialize_minimal():
-            return 1
     
     # Execute the appropriate command
     exit_code = 0
@@ -101,6 +86,8 @@ def main():
         exit_code = download.execute(api_client, config)
     elif args.subcommand == "vulns":
         exit_code = vulns.execute(api_client, config)
+    elif args.subcommand == "report":
+        exit_code = report.execute(api_client, config)
     else:
         print("Error: No command specified")
         print()
@@ -111,6 +98,7 @@ def main():
         print("  upload     Upload an SBOM")
         print("  download   Download an SBOM")
         print("  vulns      List vulnerabilities")
+        print("  report     Generate reports")
         print("  version    Show version information")
         print()
         print("For help: pylynk --help")

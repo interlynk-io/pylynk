@@ -26,7 +26,7 @@ from pylynk.constants import (
     STATUS_COMPLETED, STATUS_UNKNOWN, STATUS_KEYS
 )
 from pylynk.utils.validators import validate_file_exists, validate_boolean_flag, parse_boolean_flag
-from pylynk.api.queries import PRODUCTS_TOTAL_COUNT, PRODUCTS_LIST, SBOM_DOWNLOAD, SBOM_DOWNLOAD_NEW, VULNS_LIST
+from pylynk.api.queries import PRODUCTS_TOTAL_COUNT, PRODUCTS_LIST, PRODUCTS_LIST_LITE, SBOM_DOWNLOAD, SBOM_DOWNLOAD_NEW, VULNS_LIST, ATTRIBUTIONS_QUERY, ATTRIBUTIONS_WITH_TEXT_QUERY, PRODUCT_BY_NAME
 from pylynk.api.mutations import SBOM_UPLOAD
 
 
@@ -43,6 +43,7 @@ class LynkAPIClient:
         self.config = config
         self._data = None
         self._products_count = None
+        self._resolved_versions = None
         self._api_call_stats = {
             'total_calls': 0,
             'total_time': 0.0,
@@ -292,6 +293,47 @@ class LynkAPIClient:
 
         return prod_list
 
+    def get_products_lite(self):
+        """
+        Get list of all products using a lightweight query.
+        Only fetches fields needed for product listing.
+
+        Returns:
+            list: List of product dictionaries
+        """
+        # First get the count
+        count_data = self._fetch_product_count()
+        if not count_data or count_data.get('errors'):
+            return []
+
+        product_count = count_data.get('data', {}).get(
+            'organization', {}).get('productNodes', {}).get('prodCount', 0)
+
+        # Fetch with lite query
+        result = self._make_request(
+            PRODUCTS_LIST_LITE,
+            variables={"first": product_count},
+            operation_name="GetProductsLite"
+        )
+
+        if not result or result.get('errors'):
+            return []
+
+        prod_nodes = result['data']['organization']['productNodes']['products']
+        prod_list = []
+
+        for prod in prod_nodes:
+            versions = sum(len(env['versions'])
+                           for env in prod['environments'])
+            prod_list.append({
+                'name': prod['name'],
+                'updatedAt': prod['updatedAt'],
+                'id': prod['id'],
+                'versions': versions
+            })
+
+        return prod_list
+
     def get_versions(self, prod_id, env_id):
         """
         Get versions for a specific product and environment.
@@ -303,13 +345,18 @@ class LynkAPIClient:
         Returns:
             list: List of version dictionaries
         """
-        prod_nodes = self._data['data']['organization']['productNodes']['products']
+        # Use resolved versions from targeted query if available
+        if self._resolved_versions is not None:
+            return self._resolved_versions
 
-        for prod in prod_nodes:
-            if prod['id'] == prod_id:
-                for env in prod['environments']:
-                    if env['id'] == env_id:
-                        return env['versions']
+        # Fall back to full product data
+        if self._data:
+            prod_nodes = self._data['data']['organization']['productNodes']['products']
+            for prod in prod_nodes:
+                if prod['id'] == prod_id:
+                    for env in prod['environments']:
+                        if env['id'] == env_id:
+                            return env['versions']
 
         return None
 
@@ -750,6 +797,125 @@ class LynkAPIClient:
             return sbom_data.get('vulns', {})
 
         return None
+
+    def get_attributions(self, sbom_id, page_size=500, include_license_text=False):
+        """
+        Get all attribution data for a specific SBOM, handling pagination.
+
+        Args:
+            sbom_id (str): SBOM/Version ID
+            page_size (int): Number of results per page
+            include_license_text (bool): Include full license text in response
+
+        Returns:
+            list: All attribution nodes, or None if error
+        """
+        query = ATTRIBUTIONS_WITH_TEXT_QUERY if include_license_text else ATTRIBUTIONS_QUERY
+        all_nodes = []
+        cursor = None
+
+        while True:
+            variables = {
+                'sbomId': sbom_id,
+                'first': page_size,
+            }
+            if cursor:
+                variables['after'] = cursor
+
+            result = self._make_request(
+                query, variables, 'GetAttributionsData')
+
+            if not result or 'errors' in result:
+                return None
+
+            attributions = result.get('data', {}).get('attributions', {})
+            nodes = attributions.get('nodes', [])
+            all_nodes.extend(nodes)
+
+            page_info = attributions.get('pageInfo', {})
+            if page_info.get('hasNextPage'):
+                cursor = page_info.get('endCursor')
+            else:
+                break
+
+        logging.debug("Fetched %d attribution nodes for sbom %s", len(all_nodes), sbom_id)
+        return all_nodes
+
+    def resolve_product_env(self, prod_name, env_name=None, ver_name=None):
+        """
+        Resolve product, environment, and optionally version using a targeted API query.
+        Avoids fetching all products.
+
+        Also stores the resolved environment's versions in self._resolved_versions
+        for use by get_versions().
+
+        Args:
+            prod_name (str): Product name
+            env_name (str): Environment name (defaults to 'default')
+            ver_name (str): Version name to resolve (optional)
+
+        Returns:
+            bool: True if resolved successfully, False otherwise
+        """
+        if not env_name:
+            env_name = DEFAULT_ENVIRONMENT
+            print(f"No environment specified, using default environment: '{env_name}'")
+        env_name = env_name.lower()
+
+        result = self._make_request(
+            PRODUCT_BY_NAME,
+            variables={'name': prod_name, 'first': 10},
+            operation_name='GetProductByName'
+        )
+
+        if not result or result.get('errors'):
+            return False
+
+        products = result.get('data', {}).get('organization', {}).get(
+            'productNodes', {}).get('products', [])
+
+        # Find exact name match
+        product = next((p for p in products if p['name'] == prod_name), None)
+        if not product:
+            return False
+
+        self.config.prod_id = product['id']
+
+        # Find environment
+        env = next(
+            (e for e in product.get('environments', [])
+             if e.get('name', '').lower() == env_name),
+            None
+        )
+        if not env:
+            return False
+
+        self.config.env_id = env['id']
+        if not self.config.env:
+            self.config.env = env.get('name', env_name)
+
+        # Store versions for later use by get_versions()
+        self._resolved_versions = env.get('versions', [])
+
+        # Resolve version: by name if provided, otherwise pick latest by createdAt
+        if ver_name:
+            for ver in self._resolved_versions:
+                pc = ver.get('primaryComponent', {})
+                if pc and pc.get('version') == ver_name:
+                    self.config.ver_id = ver['id']
+                    self.config.ver_status = ver.get('vulnRunStatus', '')
+                    break
+            if not self.config.ver_id:
+                return False
+        elif self._resolved_versions:
+            latest = max(self._resolved_versions,
+                         key=lambda v: v.get('createdAt', ''))
+            self.config.ver_id = latest['id']
+            self.config.ver_status = latest.get('vulnRunStatus', '')
+            ver_display = latest.get('primaryComponent', {}).get('version', latest['id'])
+            print(f"No version specified, using latest version: {ver_display}")
+
+        return True
 
     def print_api_summary(self):
         """Print summary of API calls made during the session."""

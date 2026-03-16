@@ -32,12 +32,8 @@ def execute(api_client, config):
     Returns:
         int: Exit code (0 for success, 1 for error)
     """
-    if not api_client.resolve_identifiers():
-        return 1
-
-    # After resolve_identifiers, prod_id should be set on config if product was resolved
-    if not hasattr(config, 'prod_id') or not config.prod_id:
-        print('Product ID not resolved')
+    if not api_client.resolve_product_env(config.prod, config.env):
+        print('Could not resolve product or environment')
         return 1
 
     versions = api_client.get_versions(config.prod_id, config.env_id)
