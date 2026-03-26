@@ -45,15 +45,17 @@ query GetProducts($first: Int) {
         updatedAt
         enabled
         environments: projects {
-          id: id
-          name: name
-          versions: sboms {
-            id
-            vulnRunStatus
-            updatedAt
-            primaryComponent {
-              name
-              version
+          nodes {
+            id: id
+            name: name
+            versions: sboms {
+              id
+              vulnRunStatus
+              updatedAt
+              primaryComponent {
+                name
+                version
+              }
             }
           }
         }
@@ -78,8 +80,10 @@ query GetProductsLite($first: Int) {
         name
         updatedAt
         environments: projects {
-          versions: sboms {
-            id
+          nodes {
+            versions: sboms {
+              id
+            }
           }
         }
       }
@@ -173,16 +177,18 @@ query GetProductByName($name: String!, $first: Int) {
         id
         name
         environments: projects {
-          id
-          name
-          versions: sboms {
+          nodes {
             id
-            vulnRunStatus
-            createdAt
-            updatedAt
-            primaryComponent {
-              name
-              version
+            name
+            versions: sboms {
+              id
+              vulnRunStatus
+              createdAt
+              updatedAt
+              primaryComponent {
+                name
+                version
+              }
             }
           }
         }
@@ -205,8 +211,10 @@ query GetProductById($id: ID!) {
         id
         name
         environments: projects {
-          id
-          name
+          nodes {
+            id
+            name
+          }
         }
       }
     }

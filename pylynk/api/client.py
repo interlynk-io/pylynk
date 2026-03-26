@@ -282,8 +282,9 @@ class LynkAPIClient:
         prod_list = []
 
         for prod in prod_nodes:
+            environments = prod['environments'].get('nodes', [])
             versions = sum(len(env['versions'])
-                           for env in prod['environments'])
+                           for env in environments)
             prod_list.append({
                 'name': prod['name'],
                 'updatedAt': prod['updatedAt'],
@@ -323,8 +324,9 @@ class LynkAPIClient:
         prod_list = []
 
         for prod in prod_nodes:
+            environments = prod['environments'].get('nodes', [])
             versions = sum(len(env['versions'])
-                           for env in prod['environments'])
+                           for env in environments)
             prod_list.append({
                 'name': prod['name'],
                 'updatedAt': prod['updatedAt'],
@@ -354,7 +356,7 @@ class LynkAPIClient:
             prod_nodes = self._data['data']['organization']['productNodes']['products']
             for prod in prod_nodes:
                 if prod['id'] == prod_id:
-                    for env in prod['environments']:
+                    for env in prod['environments'].get('nodes', []):
                         if env['id'] == env_id:
                             return env['versions']
 
@@ -731,14 +733,15 @@ class LynkAPIClient:
         for product in self._data.get('data', {}).get('organization', {}).get(
                 'productNodes', {}).get('products', []):
             if product['id'] == getattr(self.config, 'prod_id', None):
+                env_nodes = product.get('environments', {}).get('nodes', [])
                 if not self.config.env_id:
                     self.config.env_id = next(
-                        (env_node['id'] for env_node in product.get('environments', [])
+                        (env_node['id'] for env_node in env_nodes
                          if env_node.get('name') == env), None)
 
                 if not self.config.env:
                     self.config.env = next(
-                        (env_node['name'] for env_node in product.get('environments', [])
+                        (env_node['name'] for env_node in env_nodes
                          if env_node.get('id') == self.config.env_id), None)
                 break
 
@@ -753,7 +756,7 @@ class LynkAPIClient:
         for product in self._data.get('data', {}).get('organization', {}).get(
                 'productNodes', {}).get('products', []):
             if product['id'] == getattr(self.config, 'prod_id', None):
-                for env in product['environments']:
+                for env in product['environments'].get('nodes', []):
                     if env['id'] == self.config.env_id:
                         for ver in env['versions']:
                             pc = ver.get('primaryComponent', {})
@@ -882,8 +885,9 @@ class LynkAPIClient:
         self.config.prod_id = product['id']
 
         # Find environment
+        env_nodes = product.get('environments', {}).get('nodes', [])
         env = next(
-            (e for e in product.get('environments', [])
+            (e for e in env_nodes
              if e.get('name', '').lower() == env_name),
             None
         )
