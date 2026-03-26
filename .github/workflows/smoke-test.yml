@@ -24,17 +24,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
       - name: Smoke test — prods
         run: |
-          python -m pylynk prods --output=json | python -c "
+          uv run python -m pylynk prods --output=json | python -c "
           import sys, json
           prods = json.load(sys.stdin)
           assert len(prods) > 0, 'Expected at least one product'
@@ -47,7 +42,7 @@ jobs:
         run: |
           # vers prints info messages to stdout when no --ver given,
           # so capture to file and extract the JSON portion
-          python -m pylynk vers \
+          uv run python -m pylynk vers \
             --prod "$TEST_PRODUCT" \
             --env "$TEST_ENV" \
             --output=json > vers_output.txt 2>&1
@@ -67,7 +62,7 @@ jobs:
       - name: Smoke test — vers
         run: |
           # vers lists all versions (no --ver flag), so capture and extract JSON
-          python -m pylynk vers \
+          uv run python -m pylynk vers \
             --prod "$TEST_PRODUCT" \
             --env "$TEST_ENV" \
             --output=json > vers_test.txt 2>&1
@@ -83,7 +78,7 @@ jobs:
 
       - name: Smoke test — status
         run: |
-          python -m pylynk status \
+          uv run python -m pylynk status \
             --prod "$TEST_PRODUCT" \
             --env "$TEST_ENV" \
             --ver "$TEST_VERSION" \
@@ -99,7 +94,7 @@ jobs:
       - name: Smoke test — download
         run: |
           echo "Downloading version: $TEST_VERSION"
-          python -m pylynk download \
+          uv run python -m pylynk download \
             --prod "$TEST_PRODUCT" \
             --env "$TEST_ENV" \
             --ver "$TEST_VERSION" | python -c "
@@ -113,7 +108,7 @@ jobs:
       - name: Smoke test — vulns
         run: |
           # vulns may print "No vulnerabilities found" instead of JSON when empty
-          python -m pylynk vulns \
+          uv run python -m pylynk vulns \
             --prod "$TEST_PRODUCT" \
             --env "$TEST_ENV" \
             --ver "$TEST_VERSION" \
@@ -132,7 +127,7 @@ jobs:
       - name: Smoke test — report attribution
         run: |
           # Capture to file to avoid BrokenPipeError from piping to head
-          python -m pylynk report \
+          uv run python -m pylynk report \
             --type attribution \
             --prod "$TEST_PRODUCT" \
             --env "$TEST_ENV" \
