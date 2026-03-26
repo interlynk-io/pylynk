@@ -1,0 +1,117 @@
+name: Smoke Test | API Integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    # Run daily at 06:00 UTC to catch upstream API changes early
+    - cron: "0 6 * * *"
+
+env:
+  INTERLYNK_SECURITY_TOKEN: ${{ secrets.INTERLYNK_SECURITY_TOKEN }}
+  # Test fixture — override via repository variables if needed
+  TEST_PRODUCT: ${{ vars.SMOKE_TEST_PRODUCT || 'AlphaT' }}
+  TEST_ENV: ${{ vars.SMOKE_TEST_ENV || 'Development' }}
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Smoke test — prods
+        run: |
+          python -m pylynk prods --output=json | python -c "
+          import sys, json
+          prods = json.load(sys.stdin)
+          assert len(prods) > 0, 'Expected at least one product'
+          assert all('NAME' in p and 'ID' in p for p in prods), 'Missing fields'
+          print(f'OK: {len(prods)} products')
+          "
+
+      - name: Smoke test — vers
+        run: |
+          python -m pylynk vers \
+            --prod "$TEST_PRODUCT" \
+            --env "$TEST_ENV" \
+            --output=json | python -c "
+          import sys, json
+          vers = json.load(sys.stdin)
+          assert len(vers) > 0, 'Expected at least one version'
+          print(f'OK: {len(vers)} versions')
+          "
+
+      - name: Smoke test — status
+        run: |
+          python -m pylynk status \
+            --prod "$TEST_PRODUCT" \
+            --env "$TEST_ENV" \
+            --output=json | python -c "
+          import sys, json
+          statuses = json.load(sys.stdin)
+          assert len(statuses) > 0, 'Expected status entries'
+          keys = {s['ACTION KEY'] for s in statuses}
+          assert 'vulnScanStatus' in keys, 'Missing vulnScanStatus'
+          print(f'OK: {len(statuses)} status entries')
+          "
+
+      - name: Smoke test — download
+        run: |
+          # Resolve latest version for download test
+          VER=$(python -m pylynk vers \
+            --prod "$TEST_PRODUCT" \
+            --env "$TEST_ENV" \
+            --output=json | python -c "
+          import sys, json
+          vers = json.load(sys.stdin)
+          print(vers[0]['VERSION'])
+          ")
+          echo "Downloading version: $VER"
+          python -m pylynk download \
+            --prod "$TEST_PRODUCT" \
+            --env "$TEST_ENV" \
+            --ver "$VER" | python -c "
+          import sys, json
+          doc = json.load(sys.stdin)
+          assert 'bomFormat' in doc or 'spdxVersion' in doc, 'Not a valid SBOM'
+          fmt = doc.get('bomFormat', doc.get('spdxVersion', 'unknown'))
+          print(f'OK: downloaded {fmt} SBOM')
+          "
+
+      - name: Smoke test — vulns
+        run: |
+          # vulns may return empty for a clean SBOM — just verify no errors
+          python -m pylynk vulns \
+            --prod "$TEST_PRODUCT" \
+            --env "$TEST_ENV" \
+            --output=json | python -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          # data is either a list of vulns or an empty list
+          print(f'OK: {len(data)} vulnerabilities')
+          "
+
+      - name: Smoke test — report attribution
+        run: |
+          python -m pylynk report \
+            --type attribution \
+            --prod "$TEST_PRODUCT" \
+            --env "$TEST_ENV" | head -1 | python -c "
+          import sys
+          header = sys.stdin.readline().strip()
+          assert 'Component Name' in header, f'Unexpected header: {header}'
+          print(f'OK: attribution report header valid')
+          "
