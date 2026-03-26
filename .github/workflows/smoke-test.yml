@@ -115,3 +115,23 @@ jobs:
           assert 'Component Name' in header, f'Unexpected header: {header}'
           print(f'OK: attribution report header valid')
           "
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v2.1.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "text": ":red_circle: pylynk smoke test failed",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": ":red_circle: *pylynk smoke test failed*\n*Branch:* `${{ github.ref_name }}`\n*Trigger:* ${{ github.event_name }}\n*Run:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View logs>"
+                  }
+                }
+              ]
+            }
