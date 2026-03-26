@@ -66,13 +66,17 @@ jobs:
 
       - name: Smoke test — vers
         run: |
+          # vers lists all versions (no --ver flag), so capture and extract JSON
           python -m pylynk vers \
             --prod "$TEST_PRODUCT" \
             --env "$TEST_ENV" \
-            --ver "$TEST_VERSION" \
-            --output=json | python -c "
-          import sys, json
-          vers = json.load(sys.stdin)
+            --output=json > vers_test.txt 2>&1
+          python -c "
+          import json
+          with open('vers_test.txt') as f:
+              lines = f.readlines()
+          json_start = next(i for i, l in enumerate(lines) if l.strip().startswith('['))
+          vers = json.loads(''.join(lines[json_start:]))
           assert len(vers) > 0, 'Expected at least one version'
           print(f'OK: {len(vers)} versions')
           "
