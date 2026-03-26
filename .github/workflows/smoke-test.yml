@@ -42,11 +42,34 @@ jobs:
           print(f'OK: {len(prods)} products')
           "
 
+      - name: Resolve latest version
+        id: resolve
+        run: |
+          # vers prints info messages to stdout when no --ver given,
+          # so capture to file and extract the JSON portion
+          python -m pylynk vers \
+            --prod "$TEST_PRODUCT" \
+            --env "$TEST_ENV" \
+            --output=json > vers_output.txt 2>&1
+
+          VER=$(python -c "
+          import json
+          with open('vers_output.txt') as f:
+              lines = f.readlines()
+          json_start = next(i for i, l in enumerate(lines) if l.strip().startswith('['))
+          data = json.loads(''.join(lines[json_start:]))
+          assert len(data) > 0, 'Expected at least one version'
+          print(data[0]['VERSION'])
+          ")
+          echo "TEST_VERSION=$VER" >> "$GITHUB_ENV"
+          echo "Resolved version: $VER"
+
       - name: Smoke test — vers
         run: |
           python -m pylynk vers \
             --prod "$TEST_PRODUCT" \
             --env "$TEST_ENV" \
+            --ver "$TEST_VERSION" \
             --output=json | python -c "
           import sys, json
           vers = json.load(sys.stdin)
@@ -59,6 +82,7 @@ jobs:
           python -m pylynk status \
             --prod "$TEST_PRODUCT" \
             --env "$TEST_ENV" \
+            --ver "$TEST_VERSION" \
             --output=json | python -c "
           import sys, json
           statuses = json.load(sys.stdin)
@@ -70,20 +94,11 @@ jobs:
 
       - name: Smoke test — download
         run: |
-          # Resolve latest version for download test
-          VER=$(python -m pylynk vers \
-            --prod "$TEST_PRODUCT" \
-            --env "$TEST_ENV" \
-            --output=json | python -c "
-          import sys, json
-          vers = json.load(sys.stdin)
-          print(vers[0]['VERSION'])
-          ")
-          echo "Downloading version: $VER"
+          echo "Downloading version: $TEST_VERSION"
           python -m pylynk download \
             --prod "$TEST_PRODUCT" \
             --env "$TEST_ENV" \
-            --ver "$VER" | python -c "
+            --ver "$TEST_VERSION" | python -c "
           import sys, json
           doc = json.load(sys.stdin)
           assert 'bomFormat' in doc or 'spdxVersion' in doc, 'Not a valid SBOM'
@@ -93,10 +108,10 @@ jobs:
 
       - name: Smoke test — vulns
         run: |
-          # vulns may return empty for a clean SBOM — just verify no errors
           python -m pylynk vulns \
             --prod "$TEST_PRODUCT" \
             --env "$TEST_ENV" \
+            --ver "$TEST_VERSION" \
             --output=json | python -c "
           import sys, json
           data = json.load(sys.stdin)
@@ -109,7 +124,8 @@ jobs:
           python -m pylynk report \
             --type attribution \
             --prod "$TEST_PRODUCT" \
-            --env "$TEST_ENV" | head -1 | python -c "
+            --env "$TEST_ENV" \
+            --ver "$TEST_VERSION" | head -1 | python -c "
           import sys
           header = sys.stdin.readline().strip()
           assert 'Component Name' in header, f'Unexpected header: {header}'
