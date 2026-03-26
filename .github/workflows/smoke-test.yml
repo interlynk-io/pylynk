@@ -112,28 +112,36 @@ jobs:
 
       - name: Smoke test — vulns
         run: |
+          # vulns may print "No vulnerabilities found" instead of JSON when empty
           python -m pylynk vulns \
             --prod "$TEST_PRODUCT" \
             --env "$TEST_ENV" \
             --ver "$TEST_VERSION" \
-            --output=json | python -c "
-          import sys, json
-          data = json.load(sys.stdin)
-          # data is either a list of vulns or an empty list
-          print(f'OK: {len(data)} vulnerabilities')
+            --output=json > vulns_output.txt 2>&1
+          python -c "
+          import json
+          with open('vulns_output.txt') as f:
+              text = f.read().strip()
+          if 'No vulnerabilities found' in text:
+              print('OK: 0 vulnerabilities')
+          else:
+              data = json.loads(text)
+              print(f'OK: {len(data)} vulnerabilities')
           "
 
       - name: Smoke test — report attribution
         run: |
+          # Capture to file to avoid BrokenPipeError from piping to head
           python -m pylynk report \
             --type attribution \
             --prod "$TEST_PRODUCT" \
             --env "$TEST_ENV" \
-            --ver "$TEST_VERSION" | head -1 | python -c "
-          import sys
-          header = sys.stdin.readline().strip()
+            --ver "$TEST_VERSION" > report_output.txt 2>&1
+          python -c "
+          with open('report_output.txt') as f:
+              header = f.readline().strip()
           assert 'Component Name' in header, f'Unexpected header: {header}'
-          print(f'OK: attribution report header valid')
+          print('OK: attribution report header valid')
           "
 
       - name: Notify Slack on failure
