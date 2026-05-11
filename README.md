@@ -77,6 +77,12 @@ python3 pylynk.py download --prod 'my-product' --verId 'version-id' --out-file s
 python3 pylynk.py vulns --prod 'my-product' --env 'production'
 ```
 
+### Update VEX
+
+```bash
+python3 pylynk.py vex update --prod 'my-product' --ver 'v1.0.0' --vuln CVE-2024-1234 --component lodash --status not_affected
+```
+
 ### Generate an Attribution Report
 
 ```bash
@@ -107,6 +113,7 @@ docker run -e INTERLYNK_SECURITY_TOKEN=$INTERLYNK_SECURITY_TOKEN \
 | `upload` | Upload an SBOM | [docs/upload.md](docs/upload.md) |
 | `download` | Download an SBOM | [docs/download.md](docs/download.md) |
 | `vulns` | List vulnerabilities | [docs/vulns.md](docs/vulns.md) |
+| `vex` | Update VEX data | [docs/vex.md](docs/vex.md) |
 | `report` | Generate reports (e.g., attribution) | [docs/report.md](docs/report.md) |
 | `version` | Show pylynk version | - |
 
@@ -205,6 +212,5 @@ docker run --network="host" -e INTERLYNK_SECURITY_TOKEN=$INTERLYNK_SECURITY_TOKE
 If you like this project, please support us by starring it.
 
 [![Stargazers](https://starchart.cc/interlynk-io/pylynk.svg)](https://starchart.cc/interlynk-io/pylynk)
-
 
 

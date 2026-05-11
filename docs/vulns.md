@@ -95,6 +95,7 @@ docker run -e INTERLYNK_SECURITY_TOKEN=$INTERLYNK_SECURITY_TOKEN \
 
 | Column | Header | Description |
 |--------|--------|-------------|
+| `component_vuln_id` | COMPONENT VULN ID | Component vulnerability identifier for VEX updates |
 | `id` | ID | Vulnerability ID (CVE/NVD alias) |
 | `part_name` | PART NAME | Part name (N/A if not from a part) |
 | `part_version` | PART VERSION | Part version (N/A if not from a part) |

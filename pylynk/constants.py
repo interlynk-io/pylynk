@@ -100,6 +100,7 @@ DEFAULT_STATUS_COLUMNS = ['action_key', 'status']
 # Note: 'part_name' and 'part_version' use special handling based on 'isPart' flag
 VULN_COLUMNS = {
     # Basic info
+    'component_vuln_id': {'path': ['id'], 'header': 'COMPONENT VULN ID'},
     'id': {'path': ['vuln', 'nvdAliasId'], 'fallback': ['vuln', 'vulnId'], 'header': 'ID'},
     'part_name': {'path': ['component', 'sbom', 'project', 'projectGroup', 'name'],
                   'header': 'PART NAME', 'requires_is_part': True},

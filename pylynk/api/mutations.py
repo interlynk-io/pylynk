@@ -36,3 +36,102 @@ mutation uploadSbom(
   }
 }
 """
+
+
+COMPONENT_VEX_UPDATE = """
+mutation UpdateCompVulnVex(
+  $compVulnId: Uuid!,
+  $vexStatusId: Uuid,
+  $sbomId: Uuid!,
+  $propagateVex: Boolean,
+  $vexJustificationId: Uuid,
+  $cdxResponseId: Uuid,
+  $note: String,
+  $impact: String,
+  $detail: String,
+  $action: String,
+  $fixedIn: String,
+  $componentVulnCustomFieldAttributes: [ComponentVulnCustomFieldAttributesInput!]
+) {
+  componentVexUpdate(
+    input: {
+      componentVulnId: $compVulnId,
+      vexStatusId: $vexStatusId,
+      currentSbomId: $sbomId,
+      propagateVex: $propagateVex,
+      vexJustificationId: $vexJustificationId,
+      cdxResponseId: $cdxResponseId,
+      note: $note,
+      impact: $impact,
+      detail: $detail,
+      action: $action,
+      fixedIn: $fixedIn,
+      componentVulnCustomFieldAttributes: $componentVulnCustomFieldAttributes
+    }
+  ) {
+    componentVuln {
+      id
+      vexJustification {
+        id
+        name
+      }
+      vexStatus {
+        id
+        name
+      }
+      cdxResponse {
+        id
+        name
+      }
+      note
+      impact
+      detail
+      actionStmt
+      fixedIn
+    }
+    errors
+  }
+}
+"""
+
+
+COMPONENT_VEX_BULK_UPDATE = """
+mutation UpdateBulkCompVex(
+  $comVulnIds: [Uuid!]!,
+  $vexStatusId: Uuid!,
+  $sbomId: Uuid,
+  $propagateVex: Boolean,
+  $vexJustificationId: Uuid,
+  $cdxResponseId: Uuid,
+  $note: String,
+  $impact: String,
+  $detail: String,
+  $action: String,
+  $fixedIn: String,
+  $componentVulnCustomFieldAttributes: [ComponentVulnCustomFieldAttributesInput!]
+) {
+  componentVexBulkUpdate(
+    input: {
+      componentVulnIds: $comVulnIds,
+      vexStatusId: $vexStatusId,
+      currentSbomId: $sbomId,
+      propagateVex: $propagateVex,
+      vexJustificationId: $vexJustificationId,
+      cdxResponseId: $cdxResponseId,
+      note: $note,
+      impact: $impact,
+      detail: $detail,
+      action: $action,
+      fixedIn: $fixedIn,
+      componentVulnCustomFieldAttributes: $componentVulnCustomFieldAttributes
+    }
+  ) {
+    clientMutationId
+    errors
+    componentVulns {
+      id
+      vulnId
+    }
+  }
+}
+"""

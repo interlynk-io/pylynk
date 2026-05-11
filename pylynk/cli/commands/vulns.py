@@ -194,7 +194,7 @@ def _print_available_columns():
 
     # Group columns by category
     categories = {
-        'Basic': ['id', 'part_name', 'part_version', 'component_name', 'component_version', 'source', 'assigned'],
+        'Basic': ['component_vuln_id', 'id', 'part_name', 'part_version', 'component_name', 'component_version', 'source', 'assigned'],
         'Vulnerability Meta (--vuln-details)': ['severity', 'kev', 'cvss', 'cvss_vector', 'epss', 'cwe'],
         'VEX Information (--vex-details)': ['status', 'details', 'notes', 'justification',
                                             'action_statement', 'impact_statement', 'response'],

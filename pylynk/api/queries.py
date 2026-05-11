@@ -14,6 +14,33 @@
 
 """GraphQL queries for PyLynk API."""
 
+VEX_STATUSES_LIST = """
+query GetVexStatuses {
+  vexStatuses {
+    id
+    name
+  }
+}
+"""
+
+VEX_JUSTIFICATIONS_LIST = """
+query GetVexJustifications {
+  vexJustifications {
+    id
+    name
+  }
+}
+"""
+
+CDX_RESPONSES_LIST = """
+query GetCdxResponses {
+  cdxResponses {
+    id
+    name
+  }
+}
+"""
+
 # Query to get the total count of products
 PRODUCTS_TOTAL_COUNT = """
 query GetProductsCount($name: String, $enabled: Boolean) {
@@ -348,6 +375,7 @@ query GetVulnProductDetails($projectId: Uuid!, $sbomId: Uuid!, $first: Int) {
         createdAt
         fixedIn
         vexStatus {
+          id
           name
         }
         vuln {
@@ -369,6 +397,7 @@ query GetVulnProductDetails($projectId: Uuid!, $sbomId: Uuid!, $first: Int) {
           }
         }
         vexJustification {
+          id
           name
         }
         impact
@@ -376,6 +405,7 @@ query GetVulnProductDetails($projectId: Uuid!, $sbomId: Uuid!, $first: Int) {
         note
         actionStmt
         cdxResponse {
+          id
           name
         }
         fixedVersions
