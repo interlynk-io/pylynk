@@ -68,6 +68,10 @@ def _get_command_examples(command):
   pylynk vulns --prod 'my-product' --vuln-details --vex-details
   pylynk vulns --list-columns''',
 
+        'vex': '''  pylynk vex update --prod 'my-product' --ver 'v1.0.0' --vuln CVE-2024-1234 --component lodash --status not_affected
+  pylynk vex bulk-update --prod 'my-product' --ver 'v1.0.0' --file vex-updates.csv
+  pylynk vex bulk-update --verId 'abc-123' --component-vuln-id 'def-456' --status affected''',
+
         'report': '''  pylynk report --type attribution --prod 'my-product' --env 'production' --ver 'v1.0.0'
   pylynk report --type attribution --prod 'my-product' --env 'production'
   pylynk report --type attribution --prod 'my-product' --env 'default' --ver 'v1.0.0' --include-license-text
@@ -146,6 +150,38 @@ def add_version_arguments(parser, required=True):
     version_group.add_argument("--verId", help="Version ID")
 
 
+def add_vex_target_arguments(parser):
+    """Add product/version targeting arguments for VEX commands."""
+    add_product_arguments(parser, required=False)
+    add_environment_argument(parser)
+    add_version_arguments(parser, required=False)
+
+
+def add_vex_payload_arguments(parser):
+    """Add shared VEX mutation payload arguments."""
+    parser.add_argument("--status", help="VEX status name")
+    parser.add_argument("--status-id", help="VEX status ID")
+    parser.add_argument("--justification", help="VEX justification name")
+    parser.add_argument("--justification-id", help="VEX justification ID")
+    parser.add_argument("--response", help="CycloneDX response name")
+    parser.add_argument("--response-id", help="CycloneDX response ID")
+    parser.add_argument("--note", help="VEX note")
+    parser.add_argument("--impact", help="VEX impact statement")
+    parser.add_argument("--detail", help="VEX detail")
+    parser.add_argument("--action", help="VEX action statement")
+    parser.add_argument("--fixed-in", help="Fixed-in version")
+    propagate_group = parser.add_mutually_exclusive_group()
+    propagate_group.add_argument("--propagate", dest="propagate_vex", action="store_true",
+                                 help="Propagate VEX to related component vulnerabilities")
+    propagate_group.add_argument("--no-propagate", dest="propagate_vex", action="store_false",
+                                 help="Do not propagate VEX")
+    parser.set_defaults(propagate_vex=None)
+    parser.add_argument("--custom-fields-file", metavar="FILE",
+                        help="JSON file containing component vulnerability custom field attributes")
+    parser.add_argument("--output", choices=['table', 'json'], default='table',
+                        help="Output format (default: table)")
+
+
 def create_parser():
     """
     Create and configure the main argument parser.
@@ -160,6 +196,7 @@ Examples:
   pylynk upload --prod 'my-product' --sbom s.json Upload an SBOM
   pylynk download --verId 'abc-123'               Download an SBOM
   pylynk vulns --prod 'my-product'                List vulnerabilities
+  pylynk vex update --prod 'p' --ver 'v1.0' --vuln CVE-2024-1234 --status not_affected
   pylynk report --type attribution --prod 'p' --env 'default' --ver 'v1.0'
 
 Environment Variables:
@@ -363,6 +400,61 @@ Column Groups:
                               help="List available column names and exit")
     add_output_format_group(vulns_parser)
     add_human_time_argument(vulns_parser)
+
+    # VEX command
+    vex_epilog = '''
+Examples:
+  pylynk vex update --prod 'my-product' --ver 'v1.0.0' --vuln CVE-2024-1234 --component lodash --status not_affected
+  pylynk vex update --verId 'abc-123' --component-vuln-id 'def-456' --status-id 'status-uuid'
+  pylynk vex bulk-update --prod 'my-product' --ver 'v1.0.0' --file vex-updates.csv
+  pylynk vex bulk-update --verId 'abc-123' --component-vuln-id 'def-456' --component-vuln-id 'ghi-789' --status affected
+
+CSV files may use component_vuln_id directly, or vuln/component/component_version names.
+'''
+    vex_parser = subparsers.add_parser(
+        "vex",
+        help="Update VEX data",
+        description="Update VEX data for component vulnerabilities.",
+        epilog=vex_epilog,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        parents=[_create_base_parser()]
+    )
+    vex_subparsers = vex_parser.add_subparsers(title="actions", dest="vex_action",
+                                               metavar='<action>')
+    vex_subparsers.required = True
+
+    vex_update_parser = vex_subparsers.add_parser(
+        "update",
+        help="Update VEX data for one component vulnerability",
+        description="Update VEX data for one component vulnerability.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        parents=[_create_base_parser()]
+    )
+    add_vex_target_arguments(vex_update_parser)
+    component_group = vex_update_parser.add_mutually_exclusive_group(required=True)
+    component_group.add_argument("--component-vuln-id", help="Component vulnerability ID")
+    component_group.add_argument("--vuln", dest="vuln_id", help="CVE or vulnerability ID")
+    vex_update_parser.add_argument("--component", help="Component name")
+    vex_update_parser.add_argument("--component-version", help="Component version")
+    add_vex_payload_arguments(vex_update_parser)
+
+    vex_bulk_parser = vex_subparsers.add_parser(
+        "bulk-update",
+        help="Update VEX data for multiple component vulnerabilities",
+        description="Update VEX data for multiple component vulnerabilities.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        parents=[_create_base_parser()]
+    )
+    add_vex_target_arguments(vex_bulk_parser)
+    bulk_component_group = vex_bulk_parser.add_mutually_exclusive_group(required=True)
+    bulk_component_group.add_argument("--file", metavar="FILE",
+                                      help="CSV or JSON file with VEX updates")
+    bulk_component_group.add_argument("--component-vuln-id", dest="component_vuln_ids",
+                                      action="append", help="Component vulnerability ID; may be repeated")
+    vex_bulk_parser.add_argument("--component", help="Component name for CLI-provided vulnerability")
+    vex_bulk_parser.add_argument("--component-version", help="Component version for CLI-provided vulnerability")
+    vex_bulk_parser.add_argument("--vuln", dest="vuln_id", help="CVE or vulnerability ID for CLI-provided update")
+    add_vex_payload_arguments(vex_bulk_parser)
 
     # Report command
     report_epilog = '''

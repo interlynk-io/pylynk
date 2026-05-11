@@ -26,8 +26,8 @@ from pylynk.constants import (
     STATUS_COMPLETED, STATUS_UNKNOWN, STATUS_KEYS
 )
 from pylynk.utils.validators import validate_file_exists, validate_boolean_flag, parse_boolean_flag
-from pylynk.api.queries import PRODUCTS_TOTAL_COUNT, PRODUCTS_LIST, PRODUCTS_LIST_LITE, SBOM_DOWNLOAD, SBOM_DOWNLOAD_NEW, VULNS_LIST, ATTRIBUTIONS_QUERY, ATTRIBUTIONS_WITH_TEXT_QUERY, PRODUCT_BY_NAME
-from pylynk.api.mutations import SBOM_UPLOAD
+from pylynk.api.queries import PRODUCTS_TOTAL_COUNT, PRODUCTS_LIST, PRODUCTS_LIST_LITE, SBOM_DOWNLOAD, SBOM_DOWNLOAD_NEW, VULNS_LIST, ATTRIBUTIONS_QUERY, ATTRIBUTIONS_WITH_TEXT_QUERY, PRODUCT_BY_NAME, VEX_STATUSES_LIST, VEX_JUSTIFICATIONS_LIST, CDX_RESPONSES_LIST
+from pylynk.api.mutations import SBOM_UPLOAD, COMPONENT_VEX_UPDATE, COMPONENT_VEX_BULK_UPDATE
 
 
 class LynkAPIClient:
@@ -800,6 +800,137 @@ class LynkAPIClient:
             return sbom_data.get('vulns', {})
 
         return None
+
+    def resolve_vex_option_id(self, option_type, name):
+        """
+        Resolve a VEX option name to its API ID.
+
+        Args:
+            option_type (str): One of status, justification, response
+            name (str): Option name to resolve
+
+        Returns:
+            str: Matching option ID, or None if not found
+        """
+        query_map = {
+            'status': (VEX_STATUSES_LIST, 'vexStatuses', 'GetVexStatuses'),
+            'justification': (VEX_JUSTIFICATIONS_LIST, 'vexJustifications', 'GetVexJustifications'),
+            'response': (CDX_RESPONSES_LIST, 'cdxResponses', 'GetCdxResponses'),
+        }
+        if option_type not in query_map or not name:
+            return None
+
+        query, root_key, operation_name = query_map[option_type]
+        result = self._make_request(
+            query,
+            operation_name=operation_name
+        )
+        if not result or result.get('errors'):
+            return None
+
+        option_data = result.get('data', {}).get(root_key, [])
+        nodes = option_data.get('nodes', []) if isinstance(option_data, dict) else option_data
+        normalized_name = self._normalize_lookup_name(name)
+        matched = next(
+            (node for node in nodes
+             if self._normalize_lookup_name(node.get('name')) == normalized_name),
+            None
+        )
+        return matched.get('id') if matched else None
+
+    def resolve_component_vuln_id(self, project_id, sbom_id, vuln_id,
+                                  component_name=None, component_version=None):
+        """
+        Resolve a component vulnerability by vulnerability and component names.
+
+        Args:
+            project_id (str): Environment ID
+            sbom_id (str): SBOM/version ID
+            vuln_id (str): CVE or vulnerability ID
+            component_name (str): Optional component name
+            component_version (str): Optional component version
+
+        Returns:
+            str: Component vulnerability ID, or None if not uniquely resolved
+        """
+        vulns = self.get_vulnerabilities(project_id, sbom_id)
+        nodes = vulns.get('nodes', []) if vulns else []
+        normalized_vuln = self._normalize_lookup_name(vuln_id)
+        normalized_component = self._normalize_lookup_name(component_name)
+        normalized_version = self._normalize_lookup_name(component_version)
+
+        matches = []
+        for node in nodes:
+            vuln = node.get('vuln') or {}
+            aliases = [vuln.get('nvdAliasId'), vuln.get('vulnId'), vuln.get('id')]
+            normalized_aliases = [
+                self._normalize_lookup_name(alias)
+                for alias in aliases
+                if alias
+            ]
+            if normalized_vuln not in normalized_aliases:
+                continue
+
+            component = node.get('component') or {}
+            if normalized_component and self._normalize_lookup_name(component.get('name')) != normalized_component:
+                continue
+            if normalized_version and self._normalize_lookup_name(component.get('version')) != normalized_version:
+                continue
+
+            matches.append(node)
+
+        if len(matches) == 1:
+            return matches[0].get('id')
+
+        if len(matches) > 1:
+            print("Error: More than one component vulnerability matched. Add --component and --component-version, or use --component-vuln-id.")
+        else:
+            print("Error: Could not find a matching component vulnerability.")
+        return None
+
+    def update_component_vex(self, variables):
+        """
+        Update VEX data for one component vulnerability.
+
+        Args:
+            variables (dict): GraphQL variables for componentVexUpdate
+
+        Returns:
+            dict: Mutation payload, or None on request failure
+        """
+        result = self._make_request(
+            COMPONENT_VEX_UPDATE,
+            variables=variables,
+            operation_name="UpdateCompVulnVex"
+        )
+        if not result or result.get('errors'):
+            return None
+        return result.get('data', {}).get('componentVexUpdate')
+
+    def bulk_update_component_vex(self, variables):
+        """
+        Update VEX data for multiple component vulnerabilities.
+
+        Args:
+            variables (dict): GraphQL variables for componentVexBulkUpdate
+
+        Returns:
+            dict: Mutation payload, or None on request failure
+        """
+        result = self._make_request(
+            COMPONENT_VEX_BULK_UPDATE,
+            variables=variables,
+            operation_name="UpdateBulkCompVex"
+        )
+        if not result or result.get('errors'):
+            return None
+        return result.get('data', {}).get('componentVexBulkUpdate')
+
+    def _normalize_lookup_name(self, value):
+        """Normalize names for forgiving CLI lookups."""
+        if value is None:
+            return ''
+        return str(value).strip().lower().replace('-', '_').replace(' ', '_')
 
     def get_attributions(self, sbom_id, page_size=500, include_license_text=False):
         """

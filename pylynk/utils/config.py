@@ -87,6 +87,28 @@ class Config:
         self.timestamp_details = getattr(args, 'timestamp_details', False)
         self.list_columns = getattr(args, 'list_columns', False)
 
+        # VEX update command options
+        self.vex_action = getattr(args, 'vex_action', None)
+        self.vex_file = getattr(args, 'file', None)
+        self.component_vuln_id = getattr(args, 'component_vuln_id', None)
+        self.component_vuln_ids = getattr(args, 'component_vuln_ids', None)
+        self.vuln_id = getattr(args, 'vuln_id', None)
+        self.component = getattr(args, 'component', None)
+        self.component_version = getattr(args, 'component_version', None)
+        self.status = getattr(args, 'status', None)
+        self.status_id = getattr(args, 'status_id', None)
+        self.justification = getattr(args, 'justification', None)
+        self.justification_id = getattr(args, 'justification_id', None)
+        self.response = getattr(args, 'response', None)
+        self.response_id = getattr(args, 'response_id', None)
+        self.note = getattr(args, 'note', None)
+        self.impact = getattr(args, 'impact', None)
+        self.detail = getattr(args, 'detail', None)
+        self.action = getattr(args, 'action', None)
+        self.fixed_in = getattr(args, 'fixed_in', None)
+        self.propagate_vex = getattr(args, 'propagate_vex', None)
+        self.custom_fields_file = getattr(args, 'custom_fields_file', None)
+
         # Logging - must be set up before CI info extraction
         self.setup_logging(args)
 

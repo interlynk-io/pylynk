@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pylynk.cli.parser import create_parser
 from pylynk.utils.config import Config
 from pylynk.api.client import LynkAPIClient
-from pylynk.cli.commands import products, versions, status, upload, download, version, vulns, report
+from pylynk.cli.commands import products, versions, status, upload, download, version, vulns, report, vex
 
 
 def main():
@@ -86,6 +86,8 @@ def main():
         exit_code = download.execute(api_client, config)
     elif args.subcommand == "vulns":
         exit_code = vulns.execute(api_client, config)
+    elif args.subcommand == "vex":
+        exit_code = vex.execute(api_client, config)
     elif args.subcommand == "report":
         exit_code = report.execute(api_client, config)
     else:
@@ -98,6 +100,7 @@ def main():
         print("  upload     Upload an SBOM")
         print("  download   Download an SBOM")
         print("  vulns      List vulnerabilities")
+        print("  vex        Update VEX data")
         print("  report     Generate reports")
         print("  version    Show version information")
         print()
