@@ -775,31 +775,71 @@ class LynkAPIClient:
 
         return self.config.ver_id is not None
 
-    def get_vulnerabilities(self, project_id, sbom_id, limit=1000):
+    def _iter_vulnerability_pages(self, project_id, sbom_id, page_size=100):
+        """Yield each page of vulnerabilities via cursor pagination."""
+        after = None
+        while True:
+            variables = {
+                'projectId': project_id,
+                'sbomId': sbom_id,
+                'first': page_size,
+                'after': after,
+            }
+            result = self._make_request(VULNS_LIST, variables, 'GetVulnProductDetails')
+            if not result or 'data' not in result:
+                return
+            vulns_page = (result['data'].get('sbom') or {}).get('vulns') or {}
+            yield vulns_page
+            page_info = vulns_page.get('pageInfo') or {}
+            if not page_info.get('hasNextPage'):
+                return
+            after = page_info.get('endCursor')
+            if not after:
+                return
+
+    def get_vulnerabilities(self, project_id, sbom_id, limit=None, page_size=100):
         """
-        Get vulnerabilities for a specific SBOM.
+        Get vulnerabilities for a specific SBOM, paginating through all pages.
 
         Args:
             project_id (str): Project/Environment ID
             sbom_id (str): SBOM/Version ID
-            limit (int): Maximum number of results
+            limit (int): Optional cap on returned nodes (None = fetch all)
+            page_size (int): Page size per GraphQL request
 
         Returns:
-            dict: Vulnerability data with nodes and totalCount, or None if error
+            dict: {'nodes': [...], 'totalCount': N}, or None on request failure
         """
-        variables = {
-            'projectId': project_id,
-            'sbomId': sbom_id,
-            'first': limit
-        }
+        all_nodes = []
+        total_count = 0
+        any_page = False
+        for page in self._iter_vulnerability_pages(project_id, sbom_id, page_size):
+            any_page = True
+            total_count = page.get('totalCount', total_count)
+            all_nodes.extend(page.get('nodes', []))
+            if limit and len(all_nodes) >= limit:
+                all_nodes = all_nodes[:limit]
+                break
+        if not any_page:
+            return None
+        return {'nodes': all_nodes, 'totalCount': total_count}
 
-        result = self._make_request(VULNS_LIST, variables, 'GetVulnProductDetails')
+    _VEX_OPTION_QUERIES = {
+        'status': (VEX_STATUSES_LIST, 'vexStatuses', 'GetVexStatuses'),
+        'justification': (VEX_JUSTIFICATIONS_LIST, 'vexJustifications', 'GetVexJustifications'),
+        'response': (CDX_RESPONSES_LIST, 'cdxResponses', 'GetCdxResponses'),
+    }
 
-        if result and 'data' in result:
-            sbom_data = result['data'].get('sbom', {})
-            return sbom_data.get('vulns', {})
-
-        return None
+    def _fetch_vex_option_nodes(self, option_type):
+        """Return the raw list of option nodes for a VEX option type."""
+        if option_type not in self._VEX_OPTION_QUERIES:
+            return []
+        query, root_key, operation_name = self._VEX_OPTION_QUERIES[option_type]
+        result = self._make_request(query, operation_name=operation_name)
+        if not result or result.get('errors'):
+            return []
+        option_data = result.get('data', {}).get(root_key, [])
+        return option_data.get('nodes', []) if isinstance(option_data, dict) else option_data
 
     def resolve_vex_option_id(self, option_type, name):
         """
@@ -812,24 +852,9 @@ class LynkAPIClient:
         Returns:
             str: Matching option ID, or None if not found
         """
-        query_map = {
-            'status': (VEX_STATUSES_LIST, 'vexStatuses', 'GetVexStatuses'),
-            'justification': (VEX_JUSTIFICATIONS_LIST, 'vexJustifications', 'GetVexJustifications'),
-            'response': (CDX_RESPONSES_LIST, 'cdxResponses', 'GetCdxResponses'),
-        }
-        if option_type not in query_map or not name:
+        if not name:
             return None
-
-        query, root_key, operation_name = query_map[option_type]
-        result = self._make_request(
-            query,
-            operation_name=operation_name
-        )
-        if not result or result.get('errors'):
-            return None
-
-        option_data = result.get('data', {}).get(root_key, [])
-        nodes = option_data.get('nodes', []) if isinstance(option_data, dict) else option_data
+        nodes = self._fetch_vex_option_nodes(option_type)
         normalized_name = self._normalize_lookup_name(name)
         matched = next(
             (node for node in nodes
@@ -837,6 +862,14 @@ class LynkAPIClient:
             None
         )
         return matched.get('id') if matched else None
+
+    def list_vex_option_names(self, option_type):
+        """Return all known names for a VEX option type."""
+        return [
+            node.get('name')
+            for node in self._fetch_vex_option_nodes(option_type)
+            if node.get('name')
+        ]
 
     def resolve_component_vuln_id(self, project_id, sbom_id, vuln_id,
                                   component_name=None, component_version=None):
@@ -853,31 +886,34 @@ class LynkAPIClient:
         Returns:
             str: Component vulnerability ID, or None if not uniquely resolved
         """
-        vulns = self.get_vulnerabilities(project_id, sbom_id)
-        nodes = vulns.get('nodes', []) if vulns else []
         normalized_vuln = self._normalize_lookup_name(vuln_id)
         normalized_component = self._normalize_lookup_name(component_name)
         normalized_version = self._normalize_lookup_name(component_version)
 
         matches = []
-        for node in nodes:
-            vuln = node.get('vuln') or {}
-            aliases = [vuln.get('nvdAliasId'), vuln.get('vulnId'), vuln.get('id')]
-            normalized_aliases = [
-                self._normalize_lookup_name(alias)
-                for alias in aliases
-                if alias
-            ]
-            if normalized_vuln not in normalized_aliases:
-                continue
+        for page in self._iter_vulnerability_pages(project_id, sbom_id):
+            for node in page.get('nodes', []):
+                vuln = node.get('vuln') or {}
+                aliases = [vuln.get('nvdAliasId'), vuln.get('vulnId'), vuln.get('id')]
+                normalized_aliases = [
+                    self._normalize_lookup_name(alias)
+                    for alias in aliases
+                    if alias
+                ]
+                if normalized_vuln not in normalized_aliases:
+                    continue
 
-            component = node.get('component') or {}
-            if normalized_component and self._normalize_lookup_name(component.get('name')) != normalized_component:
-                continue
-            if normalized_version and self._normalize_lookup_name(component.get('version')) != normalized_version:
-                continue
+                component = node.get('component') or {}
+                if normalized_component and self._normalize_lookup_name(component.get('name')) != normalized_component:
+                    continue
+                if normalized_version and self._normalize_lookup_name(component.get('version')) != normalized_version:
+                    continue
 
-            matches.append(node)
+                matches.append(node)
+                if len(matches) > 1:
+                    break
+            if len(matches) > 1:
+                break
 
         if len(matches) == 1:
             return matches[0].get('id')
