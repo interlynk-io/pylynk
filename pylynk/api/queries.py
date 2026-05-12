@@ -365,10 +365,14 @@ query GetAttributionsData($sbomId: Uuid!, $internal: Boolean, $primary: Boolean,
 
 # Query to get vulnerabilities for a specific SBOM
 VULNS_LIST = """
-query GetVulnProductDetails($projectId: Uuid!, $sbomId: Uuid!, $first: Int) {
+query GetVulnProductDetails($projectId: Uuid!, $sbomId: Uuid!, $first: Int, $after: String) {
   sbom(projectId: $projectId, sbomId: $sbomId) {
-    vulns(sbomId: $sbomId, first: $first) {
+    vulns(sbomId: $sbomId, first: $first, after: $after) {
       totalCount
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
       nodes {
         id
         isPart

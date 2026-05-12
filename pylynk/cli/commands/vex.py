@@ -302,7 +302,11 @@ def _resolve_option(api_client, config, row, option_type, row_prefix):
 
     resolved_id = api_client.resolve_vex_option_id(option_type, option_name)
     if not resolved_id:
-        print(f"Error: Could not resolve VEX {option_type} name '{option_name}'. Use --{option_type}-id instead.")
+        valid_names = api_client.list_vex_option_names(option_type)
+        print(f"Error: Could not resolve VEX {option_type} name '{option_name}'.")
+        if valid_names:
+            print(f"Valid {option_type} names: {', '.join(valid_names)}")
+        print(f"Or pass --{option_type}-id directly.")
         return UNRESOLVED_OPTION
     return resolved_id
 

@@ -141,8 +141,8 @@ def _get_value(vuln, column):
             value = None
             break
 
-    # Try fallback path if primary is None
-    if value is None and 'fallback' in col_def:
+    # Try fallback path if primary is missing or empty
+    if not value and 'fallback' in col_def:
         value = vuln
         for key in col_def['fallback']:
             if isinstance(value, dict):
