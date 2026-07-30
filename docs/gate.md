@@ -1,0 +1,139 @@
+# Gate Command (`gate`)
+
+Check whether an SBOM version passes your organization's policies, and exit
+non-zero when it does not. Designed for CI pipelines: run it after `upload`
+and the exit code blocks the pull request.
+
+## Usage
+
+```bash
+python3 pylynk.py gate --prod <product-name> --env <environment> --ver <version> [OPTIONS]
+python3 pylynk.py gate --verId <version-id> [OPTIONS]
+```
+
+An explicit version is required (either `--ver` or `--verId`). The
+latest-version fallback used by other commands is disabled here because it is
+racy when parallel CI runs upload versions concurrently.
+
+## Options
+
+| Option | Description |
+|--------|-------------|
+| `--prod` | Product name |
+| `--env` | Environment name (optional, defaults to 'default') |
+| `--ver` | Version name (mutually exclusive with `--verId`) |
+| `--verId` | Version ID (mutually exclusive with `--ver`) |
+| `--fail-on` | Lowest policy severity that blocks: `fail` (default) or `warn` |
+| `--no-wait` | Check the current state once instead of waiting for the policy scan |
+| `--timeout` | Total seconds to wait for version resolution and policy scan (default: 600) |
+| `--poll-interval` | Seconds between polling attempts (default: 15) |
+| `--output` | Output format: `table` (default) or `json` |
+| `--token` | Security token (can also use `INTERLYNK_SECURITY_TOKEN` env var) |
+| `-v, --verbose` | Enable verbose/debug output |
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Gate passed. Also returned when the organization has no active policies (a warning is printed). |
+| `1` | Operational error: authentication, network, or product/version resolution failure. |
+| `2` | Invalid command-line arguments. |
+| `3` | **Policy gate failed** — at least one blocking policy detected violations. |
+| `4` | Indeterminate: the scan timed out, ended in an error, or was never evaluated. The gate fails closed — an incomplete scan never passes. |
+
+Treat any non-zero exit as blocking in CI. Codes `3` and `4` are separate so
+you can alert differently on real policy failures vs. scan problems.
+
+## Gate Statuses
+
+| Status | Exit code | Description |
+|--------|-----------|-------------|
+| `PASS` | 0 | All active policies evaluated; no blocking violations |
+| `FAIL` | 3 | At least one active policy of blocking severity was violated |
+| `NO_POLICIES` | 0 | No active policies configured for the organization |
+| `IN_PROGRESS` | 4 (after timeout) | Policy scan is queued or running |
+| `ERROR` | 4 | Evaluation incomplete or errored (e.g., an interrupted scan) |
+| `NOT_EVALUATED` | 4 | No policy scan applies (e.g., vulnerability scanning disabled for the environment) |
+
+Only policies with severity `fail` block by default. Use `--fail-on warn` to
+also block on `warn`-severity policies. Violations of non-blocking severities
+are still listed in the output.
+
+## How Waiting Works
+
+Policy evaluation runs asynchronously after upload (it is chained after the
+vulnerability scan), so `gate` waits by default:
+
+1. If `--prod/--ver` names are given, it retries resolution until the
+   uploaded version appears.
+2. It then polls the policy verdict until the scan finishes or `--timeout`
+   is reached.
+
+Both phases share the single `--timeout` budget. On timeout the gate exits
+`4` (fail closed).
+
+## Requirements
+
+- The security token's organization role must grant the `view_policies`
+  permission (all built-in roles include it).
+- `--ver` must match the primary component version embedded in the uploaded
+  SBOM (the same value shown by `pylynk vers`).
+
+## Examples
+
+```bash
+# Gate on the version uploaded by this CI run
+python3 pylynk.py gate --prod 'my-product' --env 'default' --ver 'v1.2.3'
+
+# Block on warnings too, with a longer budget for large SBOMs
+python3 pylynk.py gate --prod 'my-product' --ver 'v1.2.3' --fail-on warn --timeout 900
+
+# One-shot check of an existing version, machine-readable
+python3 pylynk.py gate --verId 'abc-123' --no-wait --output json
+```
+
+## GitHub Actions Example
+
+```yaml
+jobs:
+  sbom-policy-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Generate SBOM
+        run: |
+          # Your SBOM generation command here
+
+      - name: Upload SBOM to Interlynk
+        env:
+          INTERLYNK_SECURITY_TOKEN: ${{ secrets.INTERLYNK_TOKEN }}
+        run: |
+          python3 pylynk.py upload --prod 'my-product' --env 'default' --sbom sbom.json
+
+      - name: Policy gate (blocks PR on failure)
+        env:
+          INTERLYNK_SECURITY_TOKEN: ${{ secrets.INTERLYNK_TOKEN }}
+        run: |
+          python3 pylynk.py gate --prod 'my-product' --env 'default' \
+            --ver "${{ github.sha }}" --timeout 600
+```
+
+The upload step automatically attaches PR metadata (PR number, commit SHA,
+repository) from the CI environment; see [docs/ci-cd.md](ci-cd.md).
+
+## Testing Locally
+
+```bash
+export INTERLYNK_API_URL=http://localhost:3000/lynkapi
+export INTERLYNK_SECURITY_TOKEN=your_test_token
+
+# Create a fail-severity policy in the UI that your SBOM violates, then:
+python3 pylynk.py upload --prod test --env default --sbom sample.json
+python3 pylynk.py gate --prod test --env default --ver <version>; echo "exit: $?"
+# expect: exit 3 with the failing policy listed
+
+# Race check: stop the backend's sidekiq worker, re-upload, then
+python3 pylynk.py gate --prod test --env default --ver <version> --timeout 30; echo "exit: $?"
+# expect: exit 4 (fail closed - never a false pass while the scan is queued)
+```

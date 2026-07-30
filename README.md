@@ -71,6 +71,13 @@ python3 pylynk.py upload --prod 'my-product' --sbom my-sbom.json
 python3 pylynk.py download --prod 'my-product' --verId 'version-id' --out-file sbom.json
 ```
 
+### Enforce Policies in CI (PR Blocking)
+
+```bash
+python3 pylynk.py gate --prod 'my-product' --env 'default' --ver 'v1.0.0'
+# exit 0 = pass, 3 = policy failure, 4 = indeterminate (see docs/gate.md)
+```
+
 ### List Vulnerabilities
 
 ```bash
@@ -112,6 +119,7 @@ docker run -e INTERLYNK_SECURITY_TOKEN=$INTERLYNK_SECURITY_TOKEN \
 | `status` | Check SBOM processing status | [docs/status.md](docs/status.md) |
 | `upload` | Upload an SBOM | [docs/upload.md](docs/upload.md) |
 | `download` | Download an SBOM | [docs/download.md](docs/download.md) |
+| `gate` | Policy gate for CI/PR blocking | [docs/gate.md](docs/gate.md) |
 | `vulns` | List vulnerabilities | [docs/vulns.md](docs/vulns.md) |
 | `vex` | Update VEX data | [docs/vex.md](docs/vex.md) |
 | `report` | Generate reports (e.g., attribution) | [docs/report.md](docs/report.md) |

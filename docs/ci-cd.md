@@ -222,3 +222,21 @@ The extracted CI information is sent as HTTP headers with upload API requests:
 | `X-Repository-URL` | Repository URL | `https://github.com/org/repo` |
 
 **Note:** These headers are only sent during `upload` operations when CI metadata collection is enabled.
+
+## Blocking Pull Requests on Policy Failures
+
+After uploading, use the `gate` command to make the pipeline fail when the
+SBOM violates your organization's policies:
+
+```yaml
+      - name: Policy gate (blocks PR on failure)
+        env:
+          INTERLYNK_SECURITY_TOKEN: ${{ secrets.INTERLYNK_TOKEN }}
+        run: |
+          python3 pylynk.py gate --prod 'my-product' --env 'default' \
+            --ver "${{ github.sha }}" --timeout 600
+```
+
+The command waits for the policy scan to finish and exits `3` on policy
+failure or `4` if the scan could not complete (fail closed). See
+[docs/gate.md](gate.md) for exit codes and options.

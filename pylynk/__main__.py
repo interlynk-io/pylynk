@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pylynk.cli.parser import create_parser
 from pylynk.utils.config import Config
 from pylynk.api.client import LynkAPIClient
-from pylynk.cli.commands import products, versions, status, upload, download, version, vulns, report, vex
+from pylynk.cli.commands import products, versions, status, upload, download, version, vulns, report, vex, gate
 
 
 def main():
@@ -71,9 +71,30 @@ def main():
             print("For more information: pylynk download --help")
             return 1
     
+    # Validate gate parameters early: require an explicit version - the
+    # latest-version fallback is racy when parallel CI runs upload versions
+    if args.subcommand == "gate":
+        has_id_params = bool(config.ver_id)
+        has_name_params = bool(config.prod and config.ver)
+
+        if not has_id_params and not has_name_params:
+            print("Error: Missing required parameters for gate")
+            print()
+            print("Please provide either:")
+            print("  --verId <version-id>")
+            print("    OR")
+            print("  --prod <product> --ver <version> [--env <environment>]")
+            print()
+            print("Examples:")
+            print("  pylynk gate --verId 'abc-123-def'")
+            print("  pylynk gate --prod 'my-product' --env 'default' --ver 'v1.0.0'")
+            print()
+            print("For more information: pylynk gate --help")
+            return 1
+
     # Execute the appropriate command
     exit_code = 0
-    
+
     if args.subcommand == "prods":
         exit_code = products.execute(api_client, config)
     elif args.subcommand == "vers":
@@ -84,6 +105,8 @@ def main():
         exit_code = upload.execute(api_client, config, args.sbom)
     elif args.subcommand == "download":
         exit_code = download.execute(api_client, config)
+    elif args.subcommand == "gate":
+        exit_code = gate.execute(api_client, config)
     elif args.subcommand == "vulns":
         exit_code = vulns.execute(api_client, config)
     elif args.subcommand == "vex":
@@ -99,6 +122,7 @@ def main():
         print("  status     Check SBOM processing status")
         print("  upload     Upload an SBOM")
         print("  download   Download an SBOM")
+        print("  gate       Check the policy gate for an SBOM (CI/PR blocking)")
         print("  vulns      List vulnerabilities")
         print("  vex        Update VEX data")
         print("  report     Generate reports")

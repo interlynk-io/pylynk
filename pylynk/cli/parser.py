@@ -63,6 +63,11 @@ def _get_command_examples(command):
   pylynk download --prod 'my-product' --env 'default' --ver 'v1.0.0' --wait-for vuln-scan,automation
   pylynk download --verId 'abc-123' --out-file sbom.json''',
 
+        'gate': '''  pylynk gate --prod 'my-product' --env 'default' --ver 'v1.0.0'
+  pylynk gate --prod 'my-product' --env 'default' --ver 'v1.0.0' --timeout 900
+  pylynk gate --verId 'abc-123' --fail-on warn
+  pylynk gate --verId 'abc-123' --no-wait --output json''',
+
         'vulns': '''  pylynk vulns --prod 'my-product'
   pylynk vulns --prod 'my-product' --env 'production'
   pylynk vulns --prod 'my-product' --vuln-details --vex-details
@@ -195,6 +200,7 @@ Examples:
   pylynk vers --prod 'my-product'                 List versions for a product
   pylynk upload --prod 'my-product' --sbom s.json Upload an SBOM
   pylynk download --verId 'abc-123'               Download an SBOM
+  pylynk gate --prod 'p' --env 'default' --ver 'v1.0'  Policy gate for CI (exit 3 on failure)
   pylynk vulns --prod 'my-product'                List vulnerabilities
   pylynk vex update --prod 'p' --ver 'v1.0' --vuln CVE-2024-1234 --status not_affected
   pylynk report --type attribution --prod 'p' --env 'default' --ver 'v1.0'
@@ -353,6 +359,49 @@ Note: Requires either --verId OR all of --prod, --env, and --ver
                                  help="Seconds between polling attempts when using --wait-for (default: 10)")
     download_parser.add_argument("--poll-timeout", type=int, default=300, metavar='SECS',
                                  help="Maximum seconds to wait for processing (default: 300)")
+
+    # Gate command
+    gate_epilog = '''
+Examples:
+  pylynk gate --prod 'my-product' --env 'default' --ver 'v1.0.0'
+  pylynk gate --prod 'my-product' --env 'default' --ver 'v1.0.0' --timeout 900
+  pylynk gate --verId 'abc-123' --fail-on warn
+  pylynk gate --verId 'abc-123' --no-wait --output json
+
+Exit codes:
+  0  gate passed (or no active policies configured)
+  1  operational error (auth, network, resolution failure)
+  2  invalid arguments
+  3  policy gate FAILED - blocking violations detected
+  4  indeterminate - scan timed out, errored, or was never evaluated
+
+Note: Requires either --verId OR both --prod and --ver (an explicit version;
+the latest-version fallback is disabled because it is racy in CI).
+'''
+    gate_parser = subparsers.add_parser(
+        "gate",
+        help="Check the policy gate for an SBOM (CI/PR blocking)",
+        description="Check whether an SBOM version passes the organization's "
+                    "policies. Waits for the policy scan to finish and exits "
+                    "non-zero on failure so CI can block the PR.",
+        epilog=gate_epilog,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        parents=[_create_base_parser()]
+    )
+    add_product_arguments(gate_parser, required=False)
+    add_environment_argument(gate_parser)
+    add_version_arguments(gate_parser, required=False)
+    gate_parser.add_argument("--fail-on", choices=['fail', 'warn'], default='fail',
+                             help="Lowest policy severity that blocks (default: fail)")
+    gate_parser.add_argument("--no-wait", action='store_false', dest='wait',
+                             help="Check current state once instead of waiting "
+                                  "for the policy scan to finish")
+    gate_parser.add_argument("--timeout", type=int, default=600, metavar='SECS',
+                             help="Total seconds to wait for resolution and "
+                                  "policy scan (default: 600)")
+    gate_parser.add_argument("--poll-interval", type=int, default=15, metavar='SECS',
+                             help="Seconds between polling attempts (default: 15)")
+    add_output_format_group(gate_parser, include_csv=False)
 
     # Version command
     version_parser = subparsers.add_parser(
