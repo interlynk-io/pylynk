@@ -435,8 +435,8 @@ query GetVulnProductDetails($projectId: Uuid!, $sbomId: Uuid!, $first: Int, $aft
 
 # Query to get the aggregate policy gate verdict for an SBOM
 SBOM_POLICY_GATE = """
-query GetSbomPolicyGate($sbomId: Uuid!, $failOn: String) {
-  sbomPolicyGate(sbomId: $sbomId, failOn: $failOn) {
+query GetSbomPolicyGate($sbomId: Uuid!, $failOn: String, $policyId: Uuid, $policyName: String) {
+  sbomPolicyGate(sbomId: $sbomId, failOn: $failOn, policyId: $policyId, policyName: $policyName) {
     status
     policyRunStatus
     evaluatedAt

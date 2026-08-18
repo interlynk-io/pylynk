@@ -79,6 +79,8 @@ class Config:
         self.gate_wait = getattr(args, 'wait', True)
         self.gate_timeout = getattr(args, 'timeout', 600)
         self.gate_poll_interval = getattr(args, 'poll_interval', 15)
+        self.policy_name = getattr(args, 'policy_name', None)
+        self.policy_id = getattr(args, 'policy_id', None)
 
         # Report command options
         self.report_type = getattr(args, 'report_type', None)

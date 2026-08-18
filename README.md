@@ -75,8 +75,12 @@ python3 pylynk.py download --prod 'my-product' --verId 'version-id' --out-file s
 
 ```bash
 python3 pylynk.py gate --prod 'my-product' --env 'default' --ver 'v1.0.0'
+python3 pylynk.py gate --prod 'my-product' --env 'default' --ver 'v1.0.0' --policy-name 'No criticals'
 # exit 0 = pass, 3 = policy failure, 4 = indeterminate (see docs/gate.md)
 ```
+
+`gate` waits for the asynchronous policy scan and can evaluate either all
+active policies or one active policy with `--policy-name` / `--policy-id`.
 
 ### List Vulnerabilities
 
@@ -220,5 +224,3 @@ docker run --network="host" -e INTERLYNK_SECURITY_TOKEN=$INTERLYNK_SECURITY_TOKE
 If you like this project, please support us by starring it.
 
 [![Stargazers](https://starchart.cc/interlynk-io/pylynk.svg)](https://starchart.cc/interlynk-io/pylynk)
-
-

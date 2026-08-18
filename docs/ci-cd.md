@@ -240,3 +240,17 @@ SBOM violates your organization's policies:
 The command waits for the policy scan to finish and exits `3` on policy
 failure or `4` if the scan could not complete (fail closed). See
 [docs/gate.md](gate.md) for exit codes and options.
+
+Use the same version value for upload and gate. In CI, a commit SHA is a good
+choice when your SBOM generator writes it as the primary component version.
+
+To block on only one policy, add `--policy-name`:
+
+```yaml
+      - name: Policy gate for one policy
+        env:
+          INTERLYNK_SECURITY_TOKEN: ${{ secrets.INTERLYNK_TOKEN }}
+        run: |
+          python3 pylynk.py gate --prod 'my-product' --env 'default' \
+            --ver "${{ github.sha }}" --policy-name 'No criticals' --timeout 600
+```

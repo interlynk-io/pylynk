@@ -365,6 +365,7 @@ Note: Requires either --verId OR all of --prod, --env, and --ver
 Examples:
   pylynk gate --prod 'my-product' --env 'default' --ver 'v1.0.0'
   pylynk gate --prod 'my-product' --env 'default' --ver 'v1.0.0' --timeout 900
+  pylynk gate --prod 'my-product' --env 'default' --ver 'v1.0.0' --policy-name 'No criticals'
   pylynk gate --verId 'abc-123' --fail-on warn
   pylynk gate --verId 'abc-123' --no-wait --output json
 
@@ -393,6 +394,11 @@ the latest-version fallback is disabled because it is racy in CI).
     add_version_arguments(gate_parser, required=False)
     gate_parser.add_argument("--fail-on", choices=['fail', 'warn'], default='fail',
                              help="Lowest policy severity that blocks (default: fail)")
+    policy_filter_group = gate_parser.add_mutually_exclusive_group()
+    policy_filter_group.add_argument("--policy-name",
+                                     help="Gate on a single active policy by exact name")
+    policy_filter_group.add_argument("--policy-id",
+                                     help="Gate on a single active policy by ID")
     gate_parser.add_argument("--no-wait", action='store_false', dest='wait',
                              help="Check current state once instead of waiting "
                                   "for the policy scan to finish")

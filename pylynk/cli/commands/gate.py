@@ -88,6 +88,8 @@ def execute(api_client, config):
         fail_on=config.fail_on,
         deadline=deadline,
         poll_interval=config.gate_poll_interval,
+        policy_id=config.policy_id,
+        policy_name=config.policy_name,
     )
 
     if gate is None:

@@ -1124,24 +1124,36 @@ class LynkAPIClient:
                   f'retrying in {poll_interval}s... [{int(remaining)}s left]')
             time.sleep(min(poll_interval, remaining))
 
-    def get_policy_gate(self, sbom_id, fail_on='fail'):
+    def get_policy_gate(self, sbom_id, fail_on='fail', policy_id=None,
+                        policy_name=None):
         """
         Fetch the aggregate policy gate verdict for an SBOM.
 
         Args:
             sbom_id (str): SBOM (version) ID
             fail_on (str): Lowest severity that blocks - 'fail' or 'warn'
+            policy_id (str): Optional active policy ID to gate on
+            policy_name (str): Optional active policy name to gate on
 
         Returns:
             dict: Gate payload (status, counts, violatingPolicies, ...) or None on error
         """
         result = self._make_request(
             SBOM_POLICY_GATE,
-            variables={'sbomId': sbom_id, 'failOn': fail_on},
+            variables={
+                'sbomId': sbom_id,
+                'failOn': fail_on,
+                'policyId': policy_id,
+                'policyName': policy_name,
+            },
             operation_name='GetSbomPolicyGate'
         )
 
-        if not result or result.get('errors'):
+        if not result:
+            return None
+        if result.get('errors'):
+            for error in result['errors']:
+                print(f"Error: {error.get('message', 'GraphQL request failed')}")
             return None
 
         gate = (result.get('data') or {}).get('sbomPolicyGate')
@@ -1152,7 +1164,8 @@ class LynkAPIClient:
         return gate
 
     def wait_for_policy_gate(self, sbom_id, fail_on='fail', deadline=None,
-                             poll_interval=15):
+                             poll_interval=15, policy_id=None,
+                             policy_name=None):
         """
         Poll the policy gate until it reaches a terminal status or the deadline.
 
@@ -1165,12 +1178,19 @@ class LynkAPIClient:
             fail_on (str): Lowest severity that blocks - 'fail' or 'warn'
             deadline (float): time.time() timestamp to give up at (None = single check)
             poll_interval (int): Seconds between polls
+            policy_id (str): Optional active policy ID to gate on
+            policy_name (str): Optional active policy name to gate on
 
         Returns:
             dict: Last gate payload seen (never None unless the query itself fails)
         """
         while True:
-            gate = self.get_policy_gate(sbom_id, fail_on)
+            gate = self.get_policy_gate(
+                sbom_id,
+                fail_on,
+                policy_id=policy_id,
+                policy_name=policy_name,
+            )
             if gate is None:
                 return None
 
