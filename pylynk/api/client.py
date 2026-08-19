@@ -45,6 +45,9 @@ class LynkAPIClient:
         self._data = None
         self._products_count = None
         self._resolved_versions = None
+        # One session, so the tens of sequential calls a `gate` run makes reuse
+        # a connection instead of repeating the TCP and TLS handshake each time.
+        self._session = requests.Session()
         self._api_call_stats = {
             'total_calls': 0,
             'total_time': 0.0,
@@ -198,7 +201,7 @@ class LynkAPIClient:
         start_time = time.time()
 
         try:
-            response = requests.post(
+            response = self._session.post(
                 self.config.api_url,
                 headers=headers,
                 json=request_data,
@@ -599,7 +602,7 @@ class LynkAPIClient:
             try:
                 with open(sbom_file, 'rb') as sbom:
                     files_map = {'0': sbom}
-                    response = requests.post(
+                    response = self._session.post(
                         self.config.api_url,
                         headers=headers,
                         data=form_data,
@@ -1089,6 +1092,28 @@ class LynkAPIClient:
 
         return True
 
+    def _wait_for_next_poll(self, deadline, poll_interval, describe):
+        """
+        Sleep until the next poll is due, or report that the deadline has passed.
+
+        Holds the deadline arithmetic shared by the polling loops below.
+
+        Args:
+            deadline (float): time.time() timestamp to give up at (None = do not wait)
+            poll_interval (int): Seconds between attempts
+            describe (callable): Given the whole seconds left, returns the line to print
+
+        Returns:
+            bool: True if it waited and the caller should retry, False if out of time
+        """
+        remaining = (deadline - time.time()) if deadline else 0
+        if remaining <= 0:
+            return False
+
+        print(describe(int(remaining)))
+        time.sleep(min(poll_interval, remaining))
+        return True
+
     def resolve_version_with_retry(self, prod_name, env_name, ver_name,
                                    deadline=None,
                                    poll_interval=DEFAULT_GATE_POLL_INTERVAL):
@@ -1116,15 +1141,14 @@ class LynkAPIClient:
             if self.resolve_product_env(prod_name, env_name, ver_name):
                 return True
 
-            remaining = (deadline - time.time()) if deadline else 0
-            if remaining <= 0:
+            if not self._wait_for_next_poll(
+                    deadline, poll_interval,
+                    lambda left, n=attempt: f'Version {ver_name!r} not found yet (attempt {n}), '
+                                            f'retrying in {poll_interval}s... [{left}s left]'):
                 return False
 
             # Reset partial resolution state before retrying
             self.config.ver_id = None
-            print(f'Version {ver_name!r} not found yet (attempt {attempt}), '
-                  f'retrying in {poll_interval}s... [{int(remaining)}s left]')
-            time.sleep(min(poll_interval, remaining))
 
     def get_policy_gate(self, sbom_id, fail_on='fail', policy_id=None,
                         policy_name=None):
@@ -1200,14 +1224,12 @@ class LynkAPIClient:
             if status not in (GATE_STATUS_IN_PROGRESS, GATE_STATUS_ERROR):
                 return gate
 
-            remaining = (deadline - time.time()) if deadline else 0
-            if remaining <= 0:
+            if not self._wait_for_next_poll(
+                    deadline, poll_interval,
+                    lambda left, g=gate, st=status: f'Policy scan {st.lower().replace("_", " ")} '
+                                                    f'(run: {g.get("policyRunStatus", "?")}), '
+                                                    f'retrying in {poll_interval}s... [{left}s left]'):
                 return gate
-
-            print(f'Policy scan {status.lower().replace("_", " ")} '
-                  f'(run: {gate.get("policyRunStatus", "?")}), '
-                  f'retrying in {poll_interval}s... [{int(remaining)}s left]')
-            time.sleep(min(poll_interval, remaining))
 
     def print_api_summary(self):
         """Print summary of API calls made during the session."""

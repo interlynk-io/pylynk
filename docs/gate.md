@@ -37,29 +37,27 @@ CI can use to pass or fail the job.
 | `--token` | Security token (can also use `INTERLYNK_SECURITY_TOKEN` env var) |
 | `-v, --verbose` | Enable verbose/debug output |
 
-## Exit Codes
+## Statuses and Exit Codes
 
-| Code | Meaning |
-|------|---------|
-| `0` | Gate passed. Also returned when the organization has no active policies (a warning is printed). |
-| `1` | Operational error: authentication, network, or product/version resolution failure. |
-| `2` | Invalid command-line arguments. |
-| `3` | **Policy gate failed** — at least one blocking policy detected violations. |
-| `4` | Indeterminate: the scan timed out, ended in an error, or was never evaluated. The gate fails closed — an incomplete scan never passes. |
-
-Treat any non-zero exit as blocking in CI. Codes `3` and `4` are separate so
-you can alert differently on real policy failures vs. scan problems.
-
-## Gate Statuses
-
-| Status | Exit code | Description |
-|--------|-----------|-------------|
+| Status | Exit | Meaning |
+|--------|------|---------|
 | `PASS` | 0 | All active policies evaluated; no blocking violations |
+| `NO_POLICIES` | 0 | No active policies configured for the organization (a warning is printed) |
 | `FAIL` | 3 | At least one active policy of blocking severity was violated |
-| `NO_POLICIES` | 0 | No active policies configured for the organization |
-| `IN_PROGRESS` | 4 (after timeout) | Policy scan is queued or running |
-| `ERROR` | 4 | Evaluation incomplete or errored (e.g., an interrupted scan) |
-| `NOT_EVALUATED` | 4 | No policy scan applies (e.g., vulnerability scanning disabled for the environment) |
+| `IN_PROGRESS` | 4 | Scan still queued or running when the timeout was reached |
+| `ERROR` | 4 | Evaluation incomplete or errored, such as an interrupted scan |
+| `NOT_EVALUATED` | 4 | No policy scan applies, such as vulnerability scanning disabled for the environment |
+
+Two exits carry no status, because the gate never got a verdict:
+
+| Exit | Meaning |
+|------|---------|
+| `1` | Authentication, network, or resolution failure, including a missing `--verId` or `--prod --ver` combination |
+| `2` | Arguments rejected by the parser |
+
+Treat any non-zero exit as blocking in CI. `3` and `4` are separate so you can
+alert differently on a real policy failure than on a scan that never completed.
+Exit `4` is the fail-closed case: an incomplete scan never passes.
 
 Only policies with severity `fail` block by default. Use `--fail-on warn` to
 also block on `warn`-severity policies. Violations of non-blocking severities

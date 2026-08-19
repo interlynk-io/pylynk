@@ -67,6 +67,7 @@ def _get_command_examples(command):
 
         'gate': '''  pylynk gate --prod 'my-product' --env 'default' --ver 'v1.0.0'
   pylynk gate --prod 'my-product' --env 'default' --ver 'v1.0.0' --timeout 900
+  pylynk gate --prod 'my-product' --env 'default' --ver 'v1.0.0' --policy-name 'No criticals'
   pylynk gate --verId 'abc-123' --fail-on warn
   pylynk gate --verId 'abc-123' --no-wait --output json''',
 
@@ -363,18 +364,14 @@ Note: Requires either --verId OR all of --prod, --env, and --ver
                                  help="Maximum seconds to wait for processing (default: 300)")
 
     # Gate command
-    gate_epilog = '''
+    gate_epilog = f'''
 Examples:
-  pylynk gate --prod 'my-product' --env 'default' --ver 'v1.0.0'
-  pylynk gate --prod 'my-product' --env 'default' --ver 'v1.0.0' --timeout 900
-  pylynk gate --prod 'my-product' --env 'default' --ver 'v1.0.0' --policy-name 'No criticals'
-  pylynk gate --verId 'abc-123' --fail-on warn
-  pylynk gate --verId 'abc-123' --no-wait --output json
+{_get_command_examples('gate')}
 
 Exit codes:
   0  gate passed (or no active policies configured)
-  1  operational error (auth, network, resolution failure)
-  2  invalid arguments
+  1  operational error (auth, network, resolution, or missing --verId/--prod --ver)
+  2  arguments rejected by the parser
   3  policy gate FAILED - blocking violations detected
   4  indeterminate - scan timed out, errored, or was never evaluated
 
