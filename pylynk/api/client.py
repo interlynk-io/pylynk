@@ -1168,7 +1168,8 @@ class LynkAPIClient:
             SBOM_POLICY_GATE,
             variables={
                 'sbomId': sbom_id,
-                'failOn': fail_on,
+                # failOn is a GraphQL enum: FAIL / WARN
+                'failOn': fail_on.upper(),
                 'policyId': policy_id,
                 'policyName': policy_name,
             },
