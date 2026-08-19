@@ -17,6 +17,8 @@
 import argparse
 import sys
 
+from pylynk.constants import DEFAULT_GATE_TIMEOUT, DEFAULT_GATE_POLL_INTERVAL
+
 
 class CustomArgumentParser(argparse.ArgumentParser):
     """Custom argument parser with improved error messages."""
@@ -402,11 +404,12 @@ the latest-version fallback is disabled because it is racy in CI).
     gate_parser.add_argument("--no-wait", action='store_false', dest='wait',
                              help="Check current state once instead of waiting "
                                   "for the policy scan to finish")
-    gate_parser.add_argument("--timeout", type=int, default=600, metavar='SECS',
-                             help="Total seconds to wait for resolution and "
-                                  "policy scan (default: 600)")
-    gate_parser.add_argument("--poll-interval", type=int, default=15, metavar='SECS',
-                             help="Seconds between polling attempts (default: 15)")
+    gate_parser.add_argument("--timeout", type=int, default=DEFAULT_GATE_TIMEOUT, metavar='SECS',
+                             help="Total seconds to wait for resolution and policy scan "
+                                  f"(default: {DEFAULT_GATE_TIMEOUT})")
+    gate_parser.add_argument("--poll-interval", type=int, default=DEFAULT_GATE_POLL_INTERVAL, metavar='SECS',
+                             help="Seconds between polling attempts "
+                                  f"(default: {DEFAULT_GATE_POLL_INTERVAL})")
     add_output_format_group(gate_parser, include_csv=False)
 
     # Version command

@@ -24,7 +24,7 @@ from pylynk.constants import (
     API_TIMEOUT, DEFAULT_ENVIRONMENT,
     STATUS_NOT_STARTED, STATUS_IN_PROGRESS, STATUS_FINISHED,
     STATUS_COMPLETED, STATUS_UNKNOWN, STATUS_KEYS,
-    GATE_STATUS_IN_PROGRESS, GATE_STATUS_ERROR
+    GATE_STATUS_IN_PROGRESS, GATE_STATUS_ERROR, DEFAULT_GATE_POLL_INTERVAL
 )
 from pylynk.utils.validators import validate_file_exists, validate_boolean_flag, parse_boolean_flag
 from pylynk.api.queries import PRODUCTS_TOTAL_COUNT, PRODUCTS_LIST, PRODUCTS_LIST_LITE, SBOM_DOWNLOAD, SBOM_DOWNLOAD_NEW, VULNS_LIST, ATTRIBUTIONS_QUERY, ATTRIBUTIONS_WITH_TEXT_QUERY, PRODUCT_BY_NAME, VEX_STATUSES_LIST, VEX_JUSTIFICATIONS_LIST, CDX_RESPONSES_LIST, SBOM_POLICY_GATE
@@ -1090,7 +1090,8 @@ class LynkAPIClient:
         return True
 
     def resolve_version_with_retry(self, prod_name, env_name, ver_name,
-                                   deadline, poll_interval=15):
+                                   deadline=None,
+                                   poll_interval=DEFAULT_GATE_POLL_INTERVAL):
         """
         Resolve product/environment/version, retrying until the version appears.
 
@@ -1103,6 +1104,7 @@ class LynkAPIClient:
             env_name (str): Environment name
             ver_name (str): Version name (required - no latest-version fallback)
             deadline (float): time.time() timestamp to give up at
+                              (None = single attempt)
             poll_interval (int): Seconds between attempts
 
         Returns:
@@ -1114,7 +1116,7 @@ class LynkAPIClient:
             if self.resolve_product_env(prod_name, env_name, ver_name):
                 return True
 
-            remaining = deadline - time.time()
+            remaining = (deadline - time.time()) if deadline else 0
             if remaining <= 0:
                 return False
 
@@ -1164,8 +1166,8 @@ class LynkAPIClient:
         return gate
 
     def wait_for_policy_gate(self, sbom_id, fail_on='fail', deadline=None,
-                             poll_interval=15, policy_id=None,
-                             policy_name=None):
+                             poll_interval=DEFAULT_GATE_POLL_INTERVAL,
+                             policy_id=None, policy_name=None):
         """
         Poll the policy gate until it reaches a terminal status or the deadline.
 

@@ -20,20 +20,42 @@ from pylynk.formatters.table_formatter import format_gate_table
 from pylynk.constants import (
     EXIT_SUCCESS, EXIT_ERROR, EXIT_POLICY_FAIL, EXIT_INDETERMINATE,
     GATE_STATUS_PASS, GATE_STATUS_FAIL, GATE_STATUS_ERROR,
-    GATE_STATUS_IN_PROGRESS, GATE_STATUS_NOT_EVALUATED, GATE_STATUS_NO_POLICIES
+    GATE_STATUS_IN_PROGRESS, GATE_STATUS_NOT_EVALUATED, GATE_STATUS_NO_POLICIES,
+    GATE_COLUMNS
 )
+
+# Exit code and closing note for each gate status, in one place so the two
+# cannot drift. Anything unexpected falls through to the fail-closed default.
+GATE_OUTCOMES = {
+    GATE_STATUS_PASS: (EXIT_SUCCESS, None),
+    GATE_STATUS_NO_POLICIES: (
+        EXIT_SUCCESS,
+        'Warning: no active policies are configured for this organization '
+        '- gate passes by default'),
+    GATE_STATUS_FAIL: (EXIT_POLICY_FAIL, None),
+    GATE_STATUS_IN_PROGRESS: (
+        EXIT_INDETERMINATE,
+        'Policy scan is still running - failing closed'),
+    GATE_STATUS_ERROR: (
+        EXIT_INDETERMINATE,
+        'Policy evaluation is incomplete or errored - failing closed'),
+    GATE_STATUS_NOT_EVALUATED: (
+        EXIT_INDETERMINATE,
+        'Policies were not evaluated for this SBOM (is vulnerability scanning '
+        'enabled for the environment?) - failing closed'),
+}
 
 
 def _format_violations(gate):
     """Flatten violating policies into table rows keyed by header name."""
-    rows = []
-    for violation in gate.get('violatingPolicies') or []:
-        rows.append({
-            'POLICY': violation.get('policyName', ''),
-            'SEVERITY': violation.get('resultType', ''),
-            'VIOLATIONS': violation.get('violationsCount', 0),
-        })
-    return rows
+    return [
+        {
+            GATE_COLUMNS['policy']['header']: violation.get('policyName', ''),
+            GATE_COLUMNS['severity']['header']: violation.get('resultType', ''),
+            GATE_COLUMNS['violations']['header']: violation.get('violationsCount', 0),
+        }
+        for violation in gate.get('violatingPolicies') or []
+    ]
 
 
 def _print_summary(gate):
@@ -44,16 +66,6 @@ def _print_summary(gate):
           f"(passed: {counts.get('passed', 0)}, failed: {counts.get('failed', 0)}, "
           f"warned: {counts.get('warned', 0)}, skipped: {counts.get('skipped', 0)}, "
           f"errored: {counts.get('errored', 0)})")
-
-
-def _exit_code_for(status):
-    """Map a gate status to the command exit code (fail closed)."""
-    if status in (GATE_STATUS_PASS, GATE_STATUS_NO_POLICIES):
-        return EXIT_SUCCESS
-    if status == GATE_STATUS_FAIL:
-        return EXIT_POLICY_FAIL
-    # IN_PROGRESS (timed out), ERROR, NOT_EVALUATED or anything unexpected
-    return EXIT_INDETERMINATE
 
 
 def execute(api_client, config):
@@ -74,8 +86,8 @@ def execute(api_client, config):
     if not config.ver_id:
         resolved = api_client.resolve_version_with_retry(
             config.prod, config.env, config.ver,
-            deadline=deadline or time.time(),
-            poll_interval=config.gate_poll_interval,
+            deadline=deadline,
+            poll_interval=config.poll_interval,
         )
         if not resolved:
             print('Could not resolve product, environment, or version')
@@ -87,7 +99,7 @@ def execute(api_client, config):
         config.ver_id,
         fail_on=config.fail_on,
         deadline=deadline,
-        poll_interval=config.gate_poll_interval,
+        poll_interval=config.poll_interval,
         policy_id=config.policy_id,
         policy_name=config.policy_name,
     )
@@ -107,17 +119,9 @@ def execute(api_client, config):
             print()
             format_gate_table(rows)
 
-    # Human-readable outcome notes (stdout, after the data)
-    if status == GATE_STATUS_NO_POLICIES:
-        print('Warning: no active policies are configured for this '
-              'organization - gate passes by default')
-    elif status == GATE_STATUS_IN_PROGRESS:
-        print(f'Timeout: policy scan still running after {config.gate_timeout}s '
-              '- failing closed (exit 4)')
-    elif status == GATE_STATUS_ERROR:
-        print('Policy evaluation is incomplete or errored - failing closed (exit 4)')
-    elif status == GATE_STATUS_NOT_EVALUATED:
-        print('Policies were not evaluated for this SBOM (is vulnerability '
-              'scanning enabled for the environment?) - failing closed (exit 4)')
+    # Human-readable outcome note (stdout, after the data)
+    exit_code, note = GATE_OUTCOMES.get(status, (EXIT_INDETERMINATE, None))
+    if note:
+        print(f'{note} (exit {exit_code})')
 
-    return _exit_code_for(status)
+    return exit_code
