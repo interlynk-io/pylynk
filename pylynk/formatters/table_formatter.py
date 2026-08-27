@@ -16,7 +16,8 @@
 
 from pylynk.constants import (
     VULN_COLUMNS, PRODUCT_COLUMNS, VERSION_COLUMNS, STATUS_COLUMNS,
-    DEFAULT_PRODUCT_COLUMNS, DEFAULT_VERSION_COLUMNS, DEFAULT_STATUS_COLUMNS
+    DEFAULT_PRODUCT_COLUMNS, DEFAULT_VERSION_COLUMNS, DEFAULT_STATUS_COLUMNS,
+    GATE_COLUMNS, DEFAULT_GATE_COLUMNS
 )
 
 
@@ -104,6 +105,21 @@ def format_status_table(status, columns=None):
 
     columns = columns or DEFAULT_STATUS_COLUMNS
     _format_generic_table(status, columns, STATUS_COLUMNS)
+
+
+def format_gate_table(violations, columns=None):
+    """
+    Format violating policies as a table.
+
+    Args:
+        violations (list): List of pre-formatted violation dictionaries
+        columns (list): Optional list of column names to display
+    """
+    if not violations:
+        return
+
+    columns = columns or DEFAULT_GATE_COLUMNS
+    _format_generic_table(violations, columns, GATE_COLUMNS)
 
 
 def format_vulns_table(vulns, columns):

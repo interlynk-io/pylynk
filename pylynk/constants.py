@@ -59,6 +59,26 @@ PROCESSING_STAGE_MAP = {
     'policy-scan': 'POLICY_SCAN',
 }
 
+# Exit codes (gate command)
+# 0 = pass, 1 = operational error, 2 = argparse error,
+# 3 = policy gate failed, 4 = indeterminate (timeout/error/not evaluated)
+EXIT_SUCCESS = 0
+EXIT_ERROR = 1
+EXIT_POLICY_FAIL = 3
+EXIT_INDETERMINATE = 4
+
+# Policy gate statuses (from sbomPolicyGate GraphQL query)
+GATE_STATUS_PASS = 'PASS'
+GATE_STATUS_FAIL = 'FAIL'
+GATE_STATUS_ERROR = 'ERROR'
+GATE_STATUS_IN_PROGRESS = 'IN_PROGRESS'
+GATE_STATUS_NOT_EVALUATED = 'NOT_EVALUATED'
+GATE_STATUS_NO_POLICIES = 'NO_POLICIES'
+
+# Gate command defaults
+DEFAULT_GATE_TIMEOUT = 600
+DEFAULT_GATE_POLL_INTERVAL = 15
+
 # SBOM Specification Types
 SBOM_SPEC_SPDX = 'SPDX'
 SBOM_SPEC_CYCLONEDX = 'CycloneDX'
@@ -95,6 +115,15 @@ STATUS_COLUMNS = {
 }
 
 DEFAULT_STATUS_COLUMNS = ['action_key', 'status']
+
+# Gate column definitions for gate command (violating policies table)
+GATE_COLUMNS = {
+    'policy': {'header': 'POLICY'},
+    'severity': {'header': 'SEVERITY'},
+    'violations': {'header': 'VIOLATIONS'},
+}
+
+DEFAULT_GATE_COLUMNS = ['policy', 'severity', 'violations']
 
 # Vulnerability column definitions for vulns command
 # Note: 'part_name' and 'part_version' use special handling based on 'isPart' flag

@@ -16,7 +16,10 @@
 
 import os
 import logging
-from pylynk.constants import DEFAULT_API_URL, ENV_API_URL, ENV_SECURITY_TOKEN, ENV_INCLUDE_CI_METADATA
+from pylynk.constants import (
+    DEFAULT_API_URL, ENV_API_URL, ENV_SECURITY_TOKEN, ENV_INCLUDE_CI_METADATA,
+    DEFAULT_GATE_TIMEOUT
+)
 from pylynk.utils.ci_info import CIInfo
 
 
@@ -73,6 +76,13 @@ class Config:
 
         # Upload options
         self.retries = getattr(args, 'retries', 3)
+
+        # Gate command options
+        self.fail_on = getattr(args, 'fail_on', 'fail')
+        self.gate_wait = getattr(args, 'wait', True)
+        self.gate_timeout = getattr(args, 'timeout', DEFAULT_GATE_TIMEOUT)
+        self.policy_name = getattr(args, 'policy_name', None)
+        self.policy_id = getattr(args, 'policy_id', None)
 
         # Report command options
         self.report_type = getattr(args, 'report_type', None)
