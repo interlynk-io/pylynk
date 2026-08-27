@@ -23,10 +23,11 @@ import requests
 from pylynk.constants import (
     API_TIMEOUT, DEFAULT_ENVIRONMENT,
     STATUS_NOT_STARTED, STATUS_IN_PROGRESS, STATUS_FINISHED,
-    STATUS_COMPLETED, STATUS_UNKNOWN, STATUS_KEYS
+    STATUS_COMPLETED, STATUS_UNKNOWN, STATUS_KEYS,
+    GATE_STATUS_IN_PROGRESS, GATE_STATUS_ERROR, DEFAULT_GATE_POLL_INTERVAL
 )
 from pylynk.utils.validators import validate_file_exists, validate_boolean_flag, parse_boolean_flag
-from pylynk.api.queries import PRODUCTS_TOTAL_COUNT, PRODUCTS_LIST, PRODUCTS_LIST_LITE, SBOM_DOWNLOAD, SBOM_DOWNLOAD_NEW, VULNS_LIST, ATTRIBUTIONS_QUERY, ATTRIBUTIONS_WITH_TEXT_QUERY, PRODUCT_BY_NAME, VEX_STATUSES_LIST, VEX_JUSTIFICATIONS_LIST, CDX_RESPONSES_LIST
+from pylynk.api.queries import PRODUCTS_TOTAL_COUNT, PRODUCTS_LIST, PRODUCTS_LIST_LITE, SBOM_DOWNLOAD, SBOM_DOWNLOAD_NEW, VULNS_LIST, ATTRIBUTIONS_QUERY, ATTRIBUTIONS_WITH_TEXT_QUERY, PRODUCT_BY_NAME, VEX_STATUSES_LIST, VEX_JUSTIFICATIONS_LIST, CDX_RESPONSES_LIST, SBOM_POLICY_GATE
 from pylynk.api.mutations import SBOM_UPLOAD, COMPONENT_VEX_UPDATE, COMPONENT_VEX_BULK_UPDATE
 
 
@@ -44,6 +45,9 @@ class LynkAPIClient:
         self._data = None
         self._products_count = None
         self._resolved_versions = None
+        # One session, so the tens of sequential calls a `gate` run makes reuse
+        # a connection instead of repeating the TCP and TLS handshake each time.
+        self._session = requests.Session()
         self._api_call_stats = {
             'total_calls': 0,
             'total_time': 0.0,
@@ -197,7 +201,7 @@ class LynkAPIClient:
         start_time = time.time()
 
         try:
-            response = requests.post(
+            response = self._session.post(
                 self.config.api_url,
                 headers=headers,
                 json=request_data,
@@ -598,7 +602,7 @@ class LynkAPIClient:
             try:
                 with open(sbom_file, 'rb') as sbom:
                     files_map = {'0': sbom}
-                    response = requests.post(
+                    response = self._session.post(
                         self.config.api_url,
                         headers=headers,
                         data=form_data,
@@ -1087,6 +1091,146 @@ class LynkAPIClient:
             print(f"No version specified, using latest version: {ver_display}")
 
         return True
+
+    def _wait_for_next_poll(self, deadline, poll_interval, describe):
+        """
+        Sleep until the next poll is due, or report that the deadline has passed.
+
+        Holds the deadline arithmetic shared by the polling loops below.
+
+        Args:
+            deadline (float): time.time() timestamp to give up at (None = do not wait)
+            poll_interval (int): Seconds between attempts
+            describe (callable): Given the whole seconds left, returns the line to print
+
+        Returns:
+            bool: True if it waited and the caller should retry, False if out of time
+        """
+        remaining = (deadline - time.time()) if deadline else 0
+        if remaining <= 0:
+            return False
+
+        print(describe(int(remaining)))
+        time.sleep(min(poll_interval, remaining))
+        return True
+
+    def resolve_version_with_retry(self, prod_name, env_name, ver_name,
+                                   deadline=None,
+                                   poll_interval=DEFAULT_GATE_POLL_INTERVAL):
+        """
+        Resolve product/environment/version, retrying until the version appears.
+
+        SBOM upload is fully asynchronous - the version record is created by a
+        background job after the upload request returns - so a gate command run
+        right after upload must wait for the version to exist.
+
+        Args:
+            prod_name (str): Product name
+            env_name (str): Environment name
+            ver_name (str): Version name (required - no latest-version fallback)
+            deadline (float): time.time() timestamp to give up at
+                              (None = single attempt)
+            poll_interval (int): Seconds between attempts
+
+        Returns:
+            bool: True if resolved (config.ver_id is set), False on timeout
+        """
+        attempt = 0
+        while True:
+            attempt += 1
+            if self.resolve_product_env(prod_name, env_name, ver_name):
+                return True
+
+            if not self._wait_for_next_poll(
+                    deadline, poll_interval,
+                    lambda left, n=attempt: f'Version {ver_name!r} not found yet (attempt {n}), '
+                                            f'retrying in {poll_interval}s... [{left}s left]'):
+                return False
+
+            # Reset partial resolution state before retrying
+            self.config.ver_id = None
+
+    def get_policy_gate(self, sbom_id, fail_on='fail', policy_id=None,
+                        policy_name=None):
+        """
+        Fetch the aggregate policy gate verdict for an SBOM.
+
+        Args:
+            sbom_id (str): SBOM (version) ID
+            fail_on (str): Lowest severity that blocks - 'fail' or 'warn'
+            policy_id (str): Optional active policy ID to gate on
+            policy_name (str): Optional active policy name to gate on
+
+        Returns:
+            dict: Gate payload (status, counts, violatingPolicies, ...) or None on error
+        """
+        result = self._make_request(
+            SBOM_POLICY_GATE,
+            variables={
+                'sbomId': sbom_id,
+                # failOn is a GraphQL enum: FAIL / WARN
+                'failOn': fail_on.upper(),
+                'policyId': policy_id,
+                'policyName': policy_name,
+            },
+            operation_name='GetSbomPolicyGate'
+        )
+
+        if not result:
+            return None
+        if result.get('errors'):
+            for error in result['errors']:
+                print(f"Error: {error.get('message', 'GraphQL request failed')}")
+            return None
+
+        gate = (result.get('data') or {}).get('sbomPolicyGate')
+        if not gate:
+            print('Error: SBOM not found - check product, environment, and version')
+            return None
+
+        return gate
+
+    def wait_for_policy_gate(self, sbom_id, fail_on='fail', deadline=None,
+                             poll_interval=DEFAULT_GATE_POLL_INTERVAL,
+                             policy_id=None, policy_name=None):
+        """
+        Poll the policy gate until it reaches a terminal status or the deadline.
+
+        Polls while the gate reports IN_PROGRESS or ERROR. ERROR is usually the
+        transient window where a superseding scan interrupted a running one;
+        if it persists until the deadline the caller treats it as indeterminate.
+
+        Args:
+            sbom_id (str): SBOM (version) ID
+            fail_on (str): Lowest severity that blocks - 'fail' or 'warn'
+            deadline (float): time.time() timestamp to give up at (None = single check)
+            poll_interval (int): Seconds between polls
+            policy_id (str): Optional active policy ID to gate on
+            policy_name (str): Optional active policy name to gate on
+
+        Returns:
+            dict: Last gate payload seen (never None unless the query itself fails)
+        """
+        while True:
+            gate = self.get_policy_gate(
+                sbom_id,
+                fail_on,
+                policy_id=policy_id,
+                policy_name=policy_name,
+            )
+            if gate is None:
+                return None
+
+            status = gate.get('status')
+            if status not in (GATE_STATUS_IN_PROGRESS, GATE_STATUS_ERROR):
+                return gate
+
+            if not self._wait_for_next_poll(
+                    deadline, poll_interval,
+                    lambda left, g=gate, st=status: f'Policy scan {st.lower().replace("_", " ")} '
+                                                    f'(run: {g.get("policyRunStatus", "?")}), '
+                                                    f'retrying in {poll_interval}s... [{left}s left]'):
+                return gate
 
     def print_api_summary(self):
         """Print summary of API calls made during the session."""

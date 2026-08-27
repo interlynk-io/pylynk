@@ -23,7 +23,45 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from pylynk.cli.parser import create_parser
 from pylynk.utils.config import Config
 from pylynk.api.client import LynkAPIClient
-from pylynk.cli.commands import products, versions, status, upload, download, version, vulns, report, vex
+from pylynk.cli.commands import products, versions, status, upload, download, version, vulns, report, vex, gate
+
+
+# Commands that address a version by --verId or by name, and the name
+# combination each one accepts. gate requires an explicit --ver because the
+# latest-version fallback is racy when parallel CI runs upload versions.
+VERSION_TARGET_COMMANDS = {
+    "download": {
+        "names": "--prod <product> --env <environment> --ver <version>",
+        "example": "pylynk download --prod 'my-product' --env 'default' --ver 'v1.0.0'",
+        "resolved": lambda c: all([c.prod, c.env, c.ver]),
+    },
+    "gate": {
+        "names": "--prod <product> --ver <version> [--env <environment>]",
+        "example": "pylynk gate --prod 'my-product' --env 'default' --ver 'v1.0.0'",
+        "resolved": lambda c: bool(c.prod and c.ver),
+    },
+}
+
+
+def _require_version_target(subcommand, config):
+    """Print usage and return False when the version target is incomplete."""
+    spec = VERSION_TARGET_COMMANDS.get(subcommand)
+    if spec is None or config.ver_id or spec["resolved"](config):
+        return True
+
+    print(f"Error: Missing required parameters for {subcommand}")
+    print()
+    print("Please provide either:")
+    print("  --verId <version-id>")
+    print("    OR")
+    print(f"  {spec['names']}")
+    print()
+    print("Examples:")
+    print(f"  pylynk {subcommand} --verId 'abc-123-def'")
+    print(f"  {spec['example']}")
+    print()
+    print(f"For more information: pylynk {subcommand} --help")
+    return False
 
 
 def main():
@@ -51,29 +89,12 @@ def main():
     if not api_client.initialize_minimal():
         return 1
 
-    # Validate download parameters early
-    if args.subcommand == "download":
-        has_id_params = bool(config.ver_id)
-        has_name_params = all([config.prod, config.env, config.ver])
+    if not _require_version_target(args.subcommand, config):
+        return 1
 
-        if not has_id_params and not has_name_params:
-            print("Error: Missing required parameters for download")
-            print()
-            print("Please provide either:")
-            print("  --verId <version-id>")
-            print("    OR")
-            print("  --prod <product> --env <environment> --ver <version>")
-            print()
-            print("Examples:")
-            print("  pylynk download --verId 'abc-123-def'")
-            print("  pylynk download --prod 'my-product' --env 'default' --ver 'v1.0.0'")
-            print()
-            print("For more information: pylynk download --help")
-            return 1
-    
     # Execute the appropriate command
     exit_code = 0
-    
+
     if args.subcommand == "prods":
         exit_code = products.execute(api_client, config)
     elif args.subcommand == "vers":
@@ -84,6 +105,8 @@ def main():
         exit_code = upload.execute(api_client, config, args.sbom)
     elif args.subcommand == "download":
         exit_code = download.execute(api_client, config)
+    elif args.subcommand == "gate":
+        exit_code = gate.execute(api_client, config)
     elif args.subcommand == "vulns":
         exit_code = vulns.execute(api_client, config)
     elif args.subcommand == "vex":
@@ -99,6 +122,7 @@ def main():
         print("  status     Check SBOM processing status")
         print("  upload     Upload an SBOM")
         print("  download   Download an SBOM")
+        print("  gate       Check the policy gate for an SBOM (CI/PR blocking)")
         print("  vulns      List vulnerabilities")
         print("  vex        Update VEX data")
         print("  report     Generate reports")
