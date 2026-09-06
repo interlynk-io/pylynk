@@ -16,6 +16,9 @@ env:
   TEST_PRODUCT: ${{ vars.SMOKE_TEST_PRODUCT || 'AlphaT' }}
   TEST_ENV: ${{ vars.SMOKE_TEST_ENV || 'Development' }}
 
+permissions:
+  contents: read
+
 jobs:
   smoke-test:
     runs-on: ubuntu-latest
