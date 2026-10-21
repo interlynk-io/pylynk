@@ -102,9 +102,13 @@ def _execute_bulk_update(api_client, config):
     if rows is None:
         return 1
 
+    vuln_index = _load_bulk_vuln_index(api_client, config, rows)
+    if vuln_index is UNRESOLVED_OPTION:
+        return 1
+
     resolved_rows = []
     for row in rows:
-        component_vuln_id = _resolve_component_vuln_id(api_client, config, row)
+        component_vuln_id = _resolve_component_vuln_id(api_client, config, row, vuln_index)
         if not component_vuln_id:
             return 1
         variables = _build_variables(api_client, config, row, bulk=True)
@@ -208,7 +212,31 @@ def _normalize_key(key):
     return str(key).strip().lower().replace('-', '_').replace(' ', '_')
 
 
-def _resolve_component_vuln_id(api_client, config, row):
+def _load_bulk_vuln_index(api_client, config, rows):
+    if not _bulk_rows_need_name_resolution(config, rows):
+        return None
+
+    if not config.env_id:
+        print("Error: Name-based component vulnerability resolution requires --prod and --env.")
+        return UNRESOLVED_OPTION
+
+    vulns_data = api_client.get_vulnerabilities(config.env_id, config.ver_id, page_size=500)
+    if vulns_data is None:
+        print("Error: Could not fetch vulnerabilities for VEX resolution.")
+        return UNRESOLVED_OPTION
+    return _index_vulnerabilities(api_client, vulns_data.get('nodes', []))
+
+
+def _bulk_rows_need_name_resolution(config, rows):
+    if getattr(config, 'component_vuln_id', None):
+        return False
+    return any(
+        not _first_value(row, 'component_vuln_id', 'component_vuln_uuid')
+        for row in rows
+    )
+
+
+def _resolve_component_vuln_id(api_client, config, row, vuln_index=None):
     component_vuln_id = _first_value(row, 'component_vuln_id', 'component_vuln_uuid')
     if component_vuln_id:
         return component_vuln_id
@@ -229,6 +257,15 @@ def _resolve_component_vuln_id(api_client, config, row):
         print("Error: Name-based component vulnerability resolution requires --prod and --env.")
         return None
 
+    if vuln_index is not None:
+        return _resolve_component_vuln_id_from_index(
+            api_client,
+            vuln_index,
+            vuln,
+            component_name=component,
+            component_version=component_version
+        )
+
     return api_client.resolve_component_vuln_id(
         config.env_id,
         config.ver_id,
@@ -236,6 +273,44 @@ def _resolve_component_vuln_id(api_client, config, row):
         component_name=component,
         component_version=component_version
     )
+
+
+def _index_vulnerabilities(api_client, nodes):
+    """Index aliases and optional component filters, retaining ambiguity."""
+    normalize = api_client._normalize_lookup_name
+    index = {}
+    for node in nodes:
+        vuln = node.get('vuln') or {}
+        aliases = {normalize(vuln.get(key)) for key in ('nvdAliasId', 'vulnId', 'id')}
+        component = node.get('component') or {}
+        name = normalize(component.get('name'))
+        version = normalize(component.get('version'))
+        for alias in aliases - {''}:
+            # Sets avoid inserting a node twice when component fields are empty.
+            for component_name in {'', name}:
+                for component_version in {'', version}:
+                    key = (alias, component_name, component_version)
+                    matches = index.setdefault(key, [])
+                    # Two candidates suffice to report an ambiguous lookup.
+                    if len(matches) < 2:
+                        matches.append(node)
+    return index
+
+
+def _resolve_component_vuln_id_from_index(api_client, vuln_index, vuln_id,
+                                          component_name=None, component_version=None):
+    normalize = api_client._normalize_lookup_name
+    key = (normalize(vuln_id), normalize(component_name), normalize(component_version))
+    matches = vuln_index.get(key, [])
+
+    if len(matches) == 1:
+        return matches[0].get('id')
+
+    if len(matches) > 1:
+        print("Error: More than one component vulnerability matched. Add --component and --component-version, or use --component-vuln-id.")
+    else:
+        print("Error: Could not find a matching component vulnerability.")
+    return None
 
 
 def _build_variables(api_client, config, row, bulk=False):
