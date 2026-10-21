@@ -45,6 +45,7 @@ class LynkAPIClient:
         self._data = None
         self._products_count = None
         self._resolved_versions = None
+        self._vex_option_nodes_cache = {}
         # One session, so the tens of sequential calls a `gate` run makes reuse
         # a connection instead of repeating the TCP and TLS handshake each time.
         self._session = requests.Session()
@@ -838,12 +839,16 @@ class LynkAPIClient:
         """Return the raw list of option nodes for a VEX option type."""
         if option_type not in self._VEX_OPTION_QUERIES:
             return []
+        if option_type in self._vex_option_nodes_cache:
+            return self._vex_option_nodes_cache[option_type]
         query, root_key, operation_name = self._VEX_OPTION_QUERIES[option_type]
         result = self._make_request(query, operation_name=operation_name)
         if not result or result.get('errors'):
             return []
         option_data = result.get('data', {}).get(root_key, [])
-        return option_data.get('nodes', []) if isinstance(option_data, dict) else option_data
+        nodes = option_data.get('nodes', []) if isinstance(option_data, dict) else option_data
+        self._vex_option_nodes_cache[option_type] = nodes
+        return nodes
 
     def resolve_vex_option_id(self, option_type, name):
         """

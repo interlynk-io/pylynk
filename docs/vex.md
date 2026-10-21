@@ -74,6 +74,8 @@ python3 pylynk.py vex bulk-update \
 
 Bulk updates require a status from either `--status` / `--status-id` or each file row. Rows with different VEX payloads are grouped and sent as separate bulk updates.
 
+For name-based CSV/JSON rows, vulnerabilities are fetched once per run in pages of 500 and indexed locally for matching. VEX option lists are cached for the run. Providing component vulnerability IDs skips name lookup. Rows with distinct notes remain separate updates so each note is preserved.
+
 ## CSV Format
 
 Rows may use internal IDs:
