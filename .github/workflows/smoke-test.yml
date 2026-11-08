@@ -23,6 +23,10 @@ jobs:
   smoke-test:
     runs-on: ubuntu-latest
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    defaults:
+      run:
+        # Explicit bash enables pipefail so JSON parsers cannot hide failures.
+        shell: bash
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -31,6 +35,12 @@ jobs:
 
       - name: Install uv
         uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5
+
+      - name: Install dependencies
+        run: |
+          uv venv .venv
+          uv pip install --python .venv/bin/python -r requirements.txt
+          echo "$GITHUB_WORKSPACE/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Smoke test — prods
         run: |
@@ -50,7 +60,11 @@ jobs:
           uv run python -m pylynk vers \
             --prod "$TEST_PRODUCT" \
             --env "$TEST_ENV" \
-            --output=json > vers_output.txt 2>&1
+            --output=json > vers_output.txt 2>&1 || {
+            result=$?
+            cat vers_output.txt
+            exit "$result"
+          }
 
           VER=$(python -c "
           import json
@@ -70,7 +84,11 @@ jobs:
           uv run python -m pylynk vers \
             --prod "$TEST_PRODUCT" \
             --env "$TEST_ENV" \
-            --output=json > vers_test.txt 2>&1
+            --output=json > vers_test.txt 2>&1 || {
+            result=$?
+            cat vers_test.txt
+            exit "$result"
+          }
           python -c "
           import json
           with open('vers_test.txt') as f:
@@ -117,7 +135,11 @@ jobs:
             --prod "$TEST_PRODUCT" \
             --env "$TEST_ENV" \
             --ver "$TEST_VERSION" \
-            --output=json > vulns_output.txt 2>&1
+            --output=json > vulns_output.txt 2>&1 || {
+            result=$?
+            cat vulns_output.txt
+            exit "$result"
+          }
           python -c "
           import json
           with open('vulns_output.txt') as f:
@@ -136,7 +158,11 @@ jobs:
             --type attribution \
             --prod "$TEST_PRODUCT" \
             --env "$TEST_ENV" \
-            --ver "$TEST_VERSION" > report_output.txt 2>&1
+            --ver "$TEST_VERSION" > report_output.txt 2>&1 || {
+            result=$?
+            cat report_output.txt
+            exit "$result"
+          }
           python -c "
           with open('report_output.txt') as f:
               header = f.readline().strip()
